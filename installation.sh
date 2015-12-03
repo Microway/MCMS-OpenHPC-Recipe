@@ -293,7 +293,7 @@ cp -a /etc/slurm/cgroup.release_common.example /etc/slurm/cgroup/release_common
 for resource in cpuset freezer memory devices; do
     ln -s /etc/slurm/cgroup/release_common /etc/slurm/cgroup/release_${resource}
 done
-cp -af /etc/slurm/cgroup ${node_chroot}/etc/slurm/cgroup
+cp -af /etc/slurm/cgroup ${node_chroot}/etc/slurm/
 cp ${dependencies_dir}/etc/slurm/cgroup.conf /etc/slurm/
 cp ${dependencies_dir}/etc/slurm/cgroup.conf ${node_chroot}/etc/slurm/
 cp ${dependencies_dir}/etc/slurm/cgroup_allowed_devices_file.conf /etc/slurm/
@@ -304,21 +304,23 @@ cp ${dependencies_dir}/etc/slurm/plugstack.conf /etc/slurm/
 cp ${dependencies_dir}/etc/slurm/plugstack.conf ${node_chroot}/etc/slurm/
 mkdir -p /etc/slurm/plugstack.conf.d
 cp ${dependencies_dir}/etc/slurm/plugstack.conf.d/x11.conf /etc/slurm/plugstack.conf.d/
-cp -af /etc/slurm/plugstack.conf.d ${node_chroot}/etc/slurm/plugstack.conf.d
+cp -af /etc/slurm/plugstack.conf.d ${node_chroot}/etc/slurm/
 
 # Put the prolog/epilog/healthcheck scripts in place
 mkdir -p {,${node_chroot}}/etc/slurm/scripts
 cp -a ${dependencies_dir}/etc/slurm/scripts/* /etc/slurm/scripts/
 cp -a ${dependencies_dir}/etc/slurm/scripts/* ${node_chroot}/etc/slurm/scripts/
+# Remove the simpler epilog script that comes with the distro
+rm -f {,${node_chroot}}/etc/slurm/slurm.epilog.clean
 
 # Set up SLURM log rotation
 cp ${dependencies_dir}/etc/logrotate.d/slurm /etc/logrotate.d/
 cp ${dependencies_dir}/etc/logrotate.d/slurm ${node_chroot}/etc/logrotate.d/
 
 # Ensure the proper SLURM running state and log directories are in place
-mkdir -p {,${node_chroot}}/var/{run,spool}/slurmd
+mkdir -p {,${node_chroot}}/var/{lib,run,spool}/slurmd
 mkdir -p {,${node_chroot}}/var/log/slurm
-chown slurm:slurm {,${node_chroot}}/var/{run,spool}/slurmd
+chown slurm:slurm {,${node_chroot}}/var/{lib,run,spool}/slurmd
 chown slurm:slurm {,${node_chroot}}/var/log/slurm
 
 # Add some additional settings/capabilities during slurmd start-up
@@ -369,10 +371,10 @@ echo "GRANT ALL ON slurm_acct_db.* TO 'slurm'@'localhost' IDENTIFIED BY '${db_mg
 # Start up the SLURM services on the Head Node
 systemctl enable munge
 systemctl start munge
-systemctl enable slurm
-systemctl start slurm
 systemctl enable slurmdbd
 systemctl start slurmdbd
+systemctl enable slurm
+systemctl start slurm
 
 # Set up SLURM accounting information. You must define clusters before you add
 # accounts, and you must add accounts before you can add users.
@@ -432,6 +434,7 @@ cat ~/.ssh/cluster.pub >> ${node_chroot}/root/.ssh/authorized_keys
 
 # Revoke SSH access to all compute nodes (except for root and admins)
 if [[ "${restrict_user_ssh_logins}" == "true" ]]; then
+    yum -y --installroot=${node_chroot} install slurm-pam_slurm-ohpc
     echo "
 - : ALL EXCEPT root hpc-admin : ALL
 "   >> ${node_chroot}/etc/security/access.conf
