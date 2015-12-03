@@ -1,0 +1,151 @@
+#!/bin/bash
+################################################################################
+######################## Microway Cluster Management Software (MCMS) for OpenHPC
+################################################################################
+#
+# Copyright (c) 2015 by Microway, Inc.
+#
+# This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
+#
+#    MCMS for OpenHPC is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    MCMS for OpenHPC is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with MCMS.  If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
+
+################################################################################
+#
+# This script is run from the front-end SLURM server when powered-down nodes
+# need to be re-activated and powered back up. This script is run as the
+# SlurmUser, not as root.
+#
+# During execution of this script, the nodes have state POWER_UP/CONFIGURING.
+#
+################################################################################
+
+
+NODELIST="$1"
+
+
+# Exit if this script isn't actually running within a SLURM context
+if [[ -z "$SLURM_CONF" ]]; then
+    echo "Do not run this script manually - it is used by SLURM"
+    exit 1
+fi
+
+
+logger "SLURM is resuming node(s) $NODELIST"
+
+
+################################################################################
+# Power on the nodes
+#
+POWERUP_EXECUTABLE=${POWERUP_EXECUTABLE:-/mcms/core/slurm/scripts/libexec/slurmctld.power_nodes_on_as_root}
+SSH_EXECUTABLE=${SSH_EXECUTABLE:-/usr/bin/ssh}
+
+# Specify arguments to pass to SSH
+# Slurm will use a private SSH key to login to the master as root
+ssh_arguments="-i /var/spool/slurmd/.ssh/.poweroff-ssh-key -2 -a -x -lroot"
+
+
+# We pass the node list in via stdin so that our SSH key checking can securely
+# verify the exact script which is running with root privileges.
+echo $NODELIST | $SSH_EXECUTABLE $ssh_arguments localhost $POWERUP_EXECUTABLE
+powerup_retval=$?
+
+# The 'wwsh' utility (which starts the nodes) returns 1 even upon success
+if [[ $powerup_retval -gt 1 ]]; then
+    exit $powerup_retval
+fi
+################################################################################
+
+
+################################################################################
+# Parse the short-form node list information from SLURM. scontrol can do this,
+# but we should try not to shell out. Example: node[1,4-7,18]
+#
+full_node_list=( )
+
+nodename_prefix=${NODELIST%%\[*}
+nodename_postfix=${NODELIST##*\]}
+short_list=${NODELIST##*\[}
+short_list=${short_list%%\]*}
+
+# If the 'node list' is a single node, we're done
+if [[ "$nodename_prefix" == "$nodename_postfix" ]]; then
+    full_node_list[0]=$NODELIST
+else
+    # Break down the comma-separated list
+    OLD_IFS=$IFS
+    IFS=,
+    for item in $short_list; do
+        range_begin=${item%%-*}
+        range_end=${item##*-}
+
+        # Add in each node in the specified node range (even if it's just one node)
+        for (( i=$range_begin; i<$(($range_end+1)); i++ )); do
+            full_node_list[${#full_node_list[@]}]=${nodename_prefix}${i}${nodename_postfix}
+        done
+    done
+    IFS=$OLD_IFS
+fi
+################################################################################
+
+
+################################################################################
+# Wait for the nodes to complete the boot process.
+# To start, we'll try one node at random. As soon as more than one node is
+# responding, we'll exit and SLURM can verify they are actually up.
+#
+# SSH will wait up to 5 seconds per attempt; we'll wait up to another 5 seconds
+retry_interval="5s"
+
+# Specify arguments to pass to SSH
+# Slurm will use a private SSH key to login as root on each compute node.
+SSH_EXECUTABLE=${SSH_EXECUTABLE:-/usr/bin/ssh}
+ssh_arguments="-i /var/spool/slurmd/.poweroff-ssh-key -2 -a -x -lroot -oConnectTimeout=${retry_interval}"
+
+# Each retry will last between 5 and 10 seconds (we'll wait 5 to 10 minutes)
+retry_attempts=60
+ssh_retval=999
+nodes_responding=0
+while [[ $ssh_retval -gt 0 ]] &&
+      [[ $retry_attempts -gt 0 ]] &&
+      [[ $nodes_responding -lt 2 ]];
+do
+    sleep $retry_interval
+
+    random_node_index=$(( $RANDOM % ${#full_node_list[@]} ))
+    random_node=${full_node_list[$random_node_index]}
+
+    $SSH_EXECUTABLE $ssh_arguments $random_node echo
+    ssh_retval=$?
+
+    # Once nodes start responding, count them
+    if [[ $ssh_retval -eq 0 ]]; then
+        nodes_responding=$(( $nodes_responding + 1 ))
+    fi
+
+    retry_attempts=$(( $retry_attempts - 1 ))
+done
+
+# If we waited the whole time and no nodes are responding, error out
+if [[ $ssh_retval -gt 0 ]] && [[ $nodes_responding -lt 2 ]]; then
+    logger "SLURM was not able to successfully power up all requested nodes"
+    exit $ssh_retval
+fi
+################################################################################
+
+
+exit 0
+

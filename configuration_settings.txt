@@ -1,0 +1,280 @@
+################################################################################
+######################## Microway Cluster Management Software (MCMS) for OpenHPC
+################################################################################
+#
+# Copyright (c) 2015 by Microway, Inc.
+#
+# This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
+#
+#    MCMS for OpenHPC is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    MCMS for OpenHPC is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with MCMS.  If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
+
+
+################################################################################
+##
+## This file defines the configuration settings for an OpenHPC cluster install.
+## Configure the settings below before starting the cluster installation script.
+##
+## The System Management Server (SMS) is often called the Head or Master Node.
+##
+################################################################################
+
+
+
+################################################################################
+# Mandatory settings - the default passwords are not acceptable!
+################################################################################
+
+# Number of compute nodes to initialize
+compute_node_count=4
+
+# Root password for the databases (MariaDB/MongoDB)
+db_root_password="ChangeMe"
+
+# Management password for the databases (will be used by Warewulf/SLURM)
+db_mgmt_password="ChangeMe"
+
+# BMC username and password for use by IPMI
+# Warewulf will add this user to the BMC on each compute node
+bmc_username="wwipmi"
+bmc_password="ChangeMe"
+
+
+
+################################################################################
+# Optional settings
+################################################################################
+
+# Install InfiniBand drivers and tools
+enable_infiniband="true"
+
+# Restrict users from logging into any node via SSH (unless a job is running)
+restrict_user_ssh_logins="true"
+
+
+# This information is used to set up the hierarchy for SLURM accounting. It is
+# easy to add more accounts after installation using the sacctmgr utility.
+#
+# TAKE NOTE: SLURM wants lower-case all-one-word organization and account names!
+#
+declare -A cluster_acct_hierarchy
+cluster_acct_hierarchy['cluster_name']="microway_hpc"
+cluster_acct_hierarchy['default_organization']="unnamed_organization"
+cluster_acct_hierarchy['default_organization_description']="Unnamed Organization"
+cluster_acct_hierarchy['default_account']="default_account"
+cluster_acct_hierarchy['default_account_description']="Default User Account"
+
+
+# MAC addresses for compute nodes
+#
+# If you don't know the MAC addresses, leave the defaults. However, you will
+# need to update these later using the Warewulf wwsh tool. Compute Nodes will
+# not boot correctly until each MAC address is registered within Warewulf.
+declare -A c_mac
+#
+# For now, we'll generate bogus MAC addresses
+for ((i=0; i<${compute_node_count}; i++)); do
+    # This algorithm supports up to 10^6 compute nodes
+    first_octet=$(( ($i+1) / 100000 ))
+    second_octet=$(( ($i+1) / 10000 ))
+    third_octet=$(( ($i+1) / 1000 ))
+    fourth_octet=$(( ($i+1) / 100 ))
+    fifth_octet=$(( ($i+1) / 10 ))
+    sixth_octet=$(( ($i+1) % 10 ))
+    c_mac[$i]=0${first_octet}:0${second_octet}:0${third_octet}:0${fourth_octet}:0${fifth_octet}:0${sixth_octet}
+done
+#
+# Set these values to have the nodes come up on boot:
+#
+# c_mac[0]=01:02:03:04:05:06
+# c_mac[1]=02:02:03:04:05:06
+# c_mac[2]=03:02:03:04:05:06
+# c_mac[3]=04:02:03:04:05:06
+#
+
+
+
+# MCMS cluster hosts
+# ==================
+#
+# A cluster needs a head node:
+#
+#   head
+#
+# For redundancy, it needs two:
+#
+#   head-a
+#   head-b
+#
+#
+# There may also be storage and login/session nodes. For example:
+#
+#   metadata1
+#   metadata2
+#
+#   storage1
+#   storage2
+#    ...
+#   storage63
+#
+#   login-a
+#   login-b
+#
+#
+# Compute node names can vary as needed, but should not include any of the names
+# listed above. Keep it simple and end with a number (which allows admins to
+# specify node ranges such as node[1-20] node[2,4,6,8] node[1,10-20] ).
+#
+#   node1
+#   node2
+#    ...
+#   node32768
+#
+#
+#
+# Network address ranges
+# ======================
+#
+# In a modern cluster, each server/node contains several IP-enabled devices,
+# such as Ethernet, InfiniBand, IPMI, etc. Microway recommends that a class B
+# network be devoted to each type of traffic (for simplicity and scaling).
+#
+# By default, Microway recommends that one of the following subnets be
+# divided up and used for the cluster traffic. Choose whichever does not
+# conflict with your existing private networks:
+#
+#   10.0.0.0/8       default (supports IPs 10.0.0.1 through 10.255.255.254)
+#   172.16.0.0/12            (supports IPs 172.16.0.1 through 172.31.255.254)
+#
+#
+# The following subnets are recommended:
+# ======================================
+#
+#   10.0.0.1  - 10.0.255.254   (Ethernet)
+#   10.10.0.1 - 10.10.255.254  (InfiniBand)
+#   10.13.0.1 - 10.13.255.254  (IPMI)
+#
+# For clusters with IP-enabled accelerators (such as Xeon Phi), use numbering:
+#   10.100.0.1 +               (Accelerator #0)
+#   10.101.0.1 +               (Accelerator #1)
+#      ...
+#   10.10N.0.1 +               (Accelerator #N)
+#
+
+# The network prefix and subnet netmask for the internal network
+internal_subnet_prefix=10.0
+internal_netmask=255.255.0.0
+
+# Network Prefix and Subnet Netmask for internal IPoIB (if IB is enabled)
+ipoib_network_prefix=10.10
+ipoib_netmask=255.255.0.0
+
+# The network prefix and subnet netmask for the BMC/IPMI network
+bmc_subnet_prefix=10.13
+bmc_netmask=255.255.0.0
+
+# The network interface on the compute nodes which will download the node image
+eth_provision=eth0
+
+# The first part of each node's name. Node numbers will be appended, so if the
+# prefix is set to 'stars' then the nodes will be: star1, star2, star3, etc.
+compute_node_name_prefix="node"
+
+# A regular expression which will capture all compute node names. This value is
+# almost always safe (unless exotic and irregular names are selected).
+compute_regex="${compute_node_name_prefix}*"
+
+# OpenHPC repo location
+ohpc_repo=http://build.openhpc.community/OpenHPC:/1.0/CentOS_7.1/OpenHPC:1.0.repo
+
+# Local ntp server for time synchronization - this is typically only necessary
+# if the cluster doesn't have access to NTP servers from the Internet.
+ntp_server=""
+
+# Additional arguments to send to the Linux kernel on compute nodes
+kargs=""
+
+# Set up a Lustre filesystem mount
+enable_lustre_client="false"
+
+# Lustre MGS mount name (if Lustre is enabled)
+mgs_fs_name="${mgs_fs_name:-10.0.255.254@o2ib:/lustre}"
+
+
+
+
+################################################################################
+# Settings which should be set up before the installation script is executed. In
+# other words, you must set the SMS/Head Node's hostname and IP addresses before
+# beginning. The values you have set are loaded in at the end of this file.
+#
+#   sms_name                       Hostname for SMS server
+#   sms_ip                         Internal IP address on SMS server
+#   sms_eth_internal               Internal Ethernet interface on SMS
+#   sms_ipoib                      IPoIB address for SMS server
+#
+################################################################################
+
+sms_name=$(hostname --short)
+sms_ip=$(ip route get ${internal_subnet_prefix}.0.1 | head -n1 | sed 's/.*src //' | tr -d '[[:space:]]')
+sms_eth_internal=$(ip route get ${internal_subnet_prefix}.0.1 | head -n1 | sed 's/.*dev \([^ ]*\) .*/\1/')
+sms_ipoib=${ipoib_network_prefix}.$(echo ${sms_ip} | sed -r 's/[0-9]+\.[0-9]+\.//')
+
+# How would we get to Google? That defines the external interface.
+sms_eth_external=$(ip route get 8.8.8.8 | head -n1 | sed 's/.*dev \([^ ]*\) .*/\1/')
+
+
+
+
+################################################################################
+# Settings which will be auto-calculated during execution:
+#
+#   c_ip[0], c_ip[1], ...          Desired compute node addresses
+#   c_bmc[0], c_bmc[1], ...        BMC addresses for compute nodes
+#   c_ipoib[0], c_ipoib[1], ...    IPoIB addresses for computes
+#
+################################################################################
+
+
+# Compute node IP addresses will start at x.x.0.1 and increase from there (with
+# a maximum limit of x.x.255.254, at which point the addresses will wrap).
+declare -A c_ip
+for ((i=0; i<${compute_node_count}; i++)); do
+    third_octet=$(( ($i+1) / 255 ))
+    fourth_octet=$(( ($i+1) % 255 ))
+    c_ip[$i]=${internal_subnet_prefix}.${third_octet}.${fourth_octet}
+done
+
+
+# Node BMC IP addresses will start at x.x.0.1 and increase from there (with
+# a maximum limit of x.x.255.254, at which point the addresses will wrap).
+declare -A c_bmc
+for ((i=0; i<${compute_node_count}; i++)); do
+    third_octet=$(( ($i+1) / 255 ))
+    fourth_octet=$(( ($i+1) % 255 ))
+    c_bmc[$i]=${bmc_subnet_prefix}.${third_octet}.${fourth_octet}
+done
+
+
+# Node IPoIB addresses will start at x.x.0.1 and increase from there (with
+# a maximum limit of x.x.255.254, at which point the addresses will wrap).
+declare -A c_ipoib
+for ((i=0; i<${compute_node_count}; i++)); do
+    third_octet=$(( ($i+1) / 255 ))
+    fourth_octet=$(( ($i+1) % 255 ))
+    c_ipoib[$i]=${ipoib_network_prefix}.${third_octet}.${fourth_octet}
+done
+

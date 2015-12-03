@@ -1,0 +1,121 @@
+#!/bin/bash
+################################################################################
+######################## Microway Cluster Management Software (MCMS) for OpenHPC
+################################################################################
+#
+# Copyright (c) 2015 by Microway, Inc.
+#
+# This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
+#
+#    MCMS for OpenHPC is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    MCMS for OpenHPC is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with MCMS.  If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
+
+################################################################################
+#
+# This epilog script is run on each compute node after a user's job has
+# completed. Other jobs (from this user or another user) could still be running.
+#
+# If no other jobs from this user are running on the node, we will ensure all
+# their processes are terminated and all temporary/scratch files are removed.
+#
+# Without this script, a user can login to a node while their job is running and
+# that session will persist even after their job has finished.
+#
+################################################################################
+
+
+# The default SLURM path can be replaced, if necessary
+#SLURM_BIN_DIR=/usr/bin/
+
+
+#
+# List of temporary directories which should be cleaned after all of
+# a user's jobs have completed. You can find all such locations on your
+# systems by running this command (it is I/O intensive!):
+#
+# find / -type d -perm 1777
+#
+TMP_DIRS="/dev/shm /tmp /usr/tmp /var/tmp"
+
+
+# Exit if this script isn't actually running within a SLURM context
+if [[ -z "$SLURM_JOB_UID" ]] || [[ -z "$SLURM_JOB_ID" ]]; then
+    echo "Do not run this script manually - it is used by SLURM"
+    exit 1
+fi
+
+
+#
+# Don't try to kill user root or system daemon jobs.
+#
+# Note that the maximum system UID varies by distro (499 for older RHEL;
+# 999 for Debian and newer versions of RHEL).
+#
+# See UID_MIN in /etc/login.defs:
+#
+#   awk '/^UID_MIN/ {print $2}' /etc/login.defs
+#
+if [[ $SLURM_JOB_UID -lt 1000 ]]; then
+    exit 0
+fi
+
+
+# Pull the list of jobs this user is currently running on this node.
+job_list=$(${SLURM_BIN_DIR}squeue --noheader --format=%A --user=$SLURM_JOB_UID --node=localhost)
+squeue_retval=$?
+
+# If squeue failed, we probably have the wrong PATH or SLURM is down...
+if [[ $squeue_retval -gt 0 ]]; then
+    exit $squeue_retval
+fi
+
+# Look through each job running on this node
+for job_id in $job_list; do
+    # If the user still has a job on this node, stop here.
+    if [[ $job_id -ne $SLURM_JOB_ID ]]; then
+        exit 0
+    fi
+done
+
+
+# Drop clean caches (recommended by OpenHPC)
+echo 3 > /proc/sys/vm/drop_caches
+
+
+#
+# No other SLURM jobs found - purge all remaining processes of this user.
+#
+# Note: the user can have other processes exiting, especially if they have
+# an interactive session (e.g., ssh with SPANK plugins). We may need to be more
+# descriminating in which processes are killed...
+#
+pkill -KILL -U $SLURM_JOB_UID
+
+
+# Remove any remaining temporary files the user created.
+for tmpdir in $TMP_DIRS; do
+    find "$tmpdir" -uid $SLURM_JOB_UID -exec rm -Rf {} +
+    find_retval=$?
+
+    if [[ $find_retval -gt 0 ]]; then
+        exit $find_retval
+    fi
+done
+
+
+# If we've gotten to the end cleanly, everything should have worked
+exit 0
+

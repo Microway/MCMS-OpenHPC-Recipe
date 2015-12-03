@@ -1,0 +1,99 @@
+#!/bin/bash
+################################################################################
+######################## Microway Cluster Management Software (MCMS) for OpenHPC
+################################################################################
+#
+# Copyright (c) 2015 by Microway, Inc.
+#
+# This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
+#
+#    MCMS for OpenHPC is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    MCMS for OpenHPC is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with MCMS.  If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
+
+################################################################################
+#
+# Start longer-running node health checks.
+#
+# This script expects to be spawned from the front-end SLURM server before a
+# user's job is started. This script is run as root.
+#
+# During execution of this script, the nodes have state POWER_UP/CONFIGURING.
+# This gives us time to run longer health tests than are normally allowed in
+# prolog and epilog scripts.
+#
+# Each NHC script is expected to finish within 2 minutes. If an error (such as
+# a broken NFS mount) causes the script to run beyond 2 minutes, it will be
+# terminated (which results in an error condition and drains the compute node).
+#
+################################################################################
+
+
+source '/mcms/scripts/util/lib.lockfile.sh'
+
+
+NHC=/usr/sbin/nhc
+
+#
+# NHC files to run:
+#  * normal (quick-running) tests
+#  * more intensive tests (e.g., accelerator memory transfer performance)
+#  * filesystem checks that could lock up (e.g., checking free space)
+#
+NHC_FILES="/etc/nhc/compute-node-checks.conf            \
+           /etc/nhc/compute-node-checks_intense.conf    \
+           /etc/nhc/compute-node-checks_blocking-io.conf"
+
+
+# Other scripts can also spawn health checks, so we need a lock file
+MCMS_LOCKFILE="node-health-check"
+
+# Attempt to get the NHC lock.
+# Because the other health tests are quick-running, we should wait a bit.
+attempts=3
+while [[ $attempts -gt 0 ]]
+do
+    mcms_get_lock
+
+    if [[ -n "$MCMS_RECEIVED_LOCK" ]]; then
+        break
+    fi
+
+    sleep 0.5s
+
+    attempts=$(( $attempts - 1 ))
+done
+
+# If unable to get the lock, we'll pass. Assume a longer health test is running.
+if [[ -z "$MCMS_RECEIVED_LOCK" ]]; then
+    exit 0
+fi
+
+
+# Execute Node Health Checks
+for nhc_file in $NHC_FILES
+do
+    eval $NHC -c $nhc_file
+    nhc_retval=$?
+
+    if [[ $nhc_retval -gt 0 ]]; then
+        exit $nhc_retval
+    fi
+done
+
+
+# If we've gotten to the end cleanly, everything should have worked
+exit 0
+

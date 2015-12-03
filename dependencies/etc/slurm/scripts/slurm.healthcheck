@@ -1,0 +1,62 @@
+#!/bin/bash
+################################################################################
+######################## Microway Cluster Management Software (MCMS) for OpenHPC
+################################################################################
+#
+# Copyright (c) 2015 by Microway, Inc.
+#
+# This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
+#
+#    MCMS for OpenHPC is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    MCMS for OpenHPC is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with MCMS.  If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
+
+################################################################################
+#
+# Start a node health check.
+#
+# This should run very fast and not use system resources, as it will be running
+# at the same time as compute jobs. Longer-term health checks may be run inside
+# the slurm.healthcheck_long script.
+#
+################################################################################
+
+
+source '/mcms/scripts/util/lib.lockfile.sh'
+
+
+NHC=/usr/sbin/nhc
+
+NHC_FILE="/etc/nhc/compute-node-checks.conf"
+
+
+# Other scripts can also spawn health checks, so we need a lock file
+MCMS_LOCKFILE="node-health-check"
+
+# Attempt to get the NHC lock
+mcms_get_lock
+
+# If unable to get the lock, we'll pass. Assume a longer health test is running.
+if [[ -z "$MCMS_RECEIVED_LOCK" ]]; then
+    exit 0
+fi
+
+
+# Execute Node Health Check
+eval $NHC -c $NHC_FILE
+nhc_retval=$?
+
+
+exit $nhc_retval

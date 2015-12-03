@@ -1,0 +1,100 @@
+################################################################################
+######################## Microway Cluster Management Software (MCMS) for OpenHPC
+################################################################################
+#
+# Copyright (c) 2015 by Microway, Inc.
+#
+# This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
+#
+#    MCMS for OpenHPC is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    MCMS for OpenHPC is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with MCMS.  If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
+
+################################################################################
+#
+# Additional SLURM configuration
+#
+# This file is sourced by slurmd upon startup
+#
+################################################################################
+
+
+# Increase memory limits - required for InfiniBand
+ulimit -l unlimited
+
+# Increase the open file limit
+ulimit -n 8192
+
+# Memlocks the slurmd process's memory so that if a node
+# starts swapping, the slurmd will continue to respond
+SLURMD_OPTIONS="-M"
+
+
+
+############## Discover "Generic Resources" and Populate gres.conf #############
+gresfile=/etc/slurm/gres.conf
+
+
+########### Add GPUs (if present) ##########
+if [[ -n "$(lspci | grep NVIDIA)" ]]; then
+    # If GPU settings are already present, assume they've been set elsewhere,
+    # or that SLURM is restarting and set them up the last time it started.
+    if [[ -z "$(grep '/dev/nvidia' $gresfile 2> /dev/null)" ]]; then
+        if [[ -c /dev/nvidia0 ]]; then
+            for gpu_device in $(find /dev/ -type c -name "nvidia[0-9]*" | sort); do
+                gpu_id=${gpu_device#*nvidia}
+                gpu_name=$(nvidia-smi --format=csv,noheader --query-gpu=gpu_name --id=${gpu_id} | sed 's/ /_/g')
+
+                # If we were able to grab the name, we provide the additional
+                # information to SLURM. If not, SLURM will just see a group of
+                # generic GPU devices (without knowing their type)
+                if [[ -n "${gpu_name}" ]]; then
+                    # SLURM requires that we also inform it which CPUs are
+                    # allowed to use each GPU. By default, we allow all CPUs:
+                    cpu_list=( $(awk '/processor/ {print $3}' /proc/cpuinfo) )
+                    first_cpu=${cpu_list[0]}
+                    final_cpu=${cpu_list[${#cpu_list[@]}-1]}
+
+                    echo "Name=gpu Type=${gpu_name} File=$gpu_device CPUs=${first_cpu}\-${final_cpu}" >> $gresfile
+                else
+                    echo "Name=gpu File=$gpu_device" >> $gresfile
+                fi
+            done
+        else
+            echo "SLURM startup - unable to add GPUs to SLURM $gresfile file - lspci reports GPUs, but they are not in /dev !"
+        fi
+    fi
+else
+    echo "SLURM startup - no NVIDIA GPUs detected..."
+fi
+
+
+########### Add Intel Xeon Phi MIC coprocessors (if present) ##########
+if [[ -n "$(lspci | grep 'Xeon Phi coprocessor')" ]]; then
+    # If MIC settings are already present, assume they've been set elsewhere,
+    # or that SLURM is restarting and set them up the last time it started.
+    if [[ -z "$(grep '/dev/mic' $gresfile 2> /dev/null)" ]]; then
+        if [[ -c /dev/mic0 ]]; then
+            for mic in $(find /dev/ -type c -name "mic[0-9]*" | sort); do
+                echo "Name=mic File=$mic" >> $gresfile
+            done
+        else
+            echo "SLURM startup - unable to add Xeon Phi coprocessors to SLURM $gresfile file - lspci reports PHIs, but they are not in /dev !"
+        fi
+    fi
+else
+    echo "SLURM startup - no Intel Xeon PHIs detected..."
+fi
+
