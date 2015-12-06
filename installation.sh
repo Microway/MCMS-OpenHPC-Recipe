@@ -214,11 +214,11 @@ STARTMODE='auto'
 
 " >> /etc/sysconfig/network-scripts/ifcfg-ib0
 
-    systemctl enable rdma
-    systemctl start rdma
+    systemctl enable rdma.service
+    systemctl start rdma.service
 
-    systemctl enable opensm
-    systemctl start opensm
+    systemctl enable opensm.service
+    systemctl start opensm.service
 fi
 
 
@@ -237,17 +237,17 @@ sed -i "s/Allow from all/Require all granted/" $HTTPD_FILE
 perl -ni -e "print unless /^\s+Order allow,deny/" $HTTPD_FILE
 
 systemctl enable httpd.service
-systemctl restart httpd
+systemctl restart httpd.service
 
 
 # TFTP
 sed -i -r "s/^\s+disable\s+= yes/       disable = no/" /etc/xinetd.d/tftp
-systemctl restart xinetd
+systemctl restart xinetd.service
 
 
 # MariaDB Database
 systemctl enable mariadb.service
-systemctl restart mariadb
+systemctl restart mariadb.service
 
 
 # NFS Exports
@@ -258,7 +258,7 @@ echo "
 
 " >> /etc/exports
 exportfs -a
-systemctl restart nfs
+systemctl restart nfs.service
 
 
 
@@ -369,12 +369,12 @@ echo "GRANT ALL ON slurm_acct_db.* TO 'slurm'@'localhost' IDENTIFIED BY '${db_mg
      | mysql -u root
 
 # Start up the SLURM services on the Head Node
-systemctl enable munge
-systemctl start munge
-systemctl enable slurmdbd
-systemctl start slurmdbd
-systemctl enable slurm
-systemctl start slurm
+systemctl enable munge.service
+systemctl start munge.service
+systemctl enable slurmdbd.service
+systemctl start slurmdbd.service
+systemctl enable slurm.service
+systemctl start slurm.service
 
 # Set up SLURM accounting information. You must define clusters before you add
 # accounts, and you must add accounts before you can add users.
@@ -453,6 +453,9 @@ cp -p /etc/resolv.conf ${node_chroot}/etc/resolv.conf
 yum -y --installroot=${node_chroot} groupinstall ohpc-slurm-client
 yum -y --installroot=${node_chroot} install kernel lmod-ohpc ntp
 
+chroot ${node_chroot} systemctl enable munge.service
+chroot ${node_chroot} systemctl enable slurm.service
+
 
 if [[ "${enable_infiniband}" == "true" ]]; then
     yum -y --installroot=${node_chroot} groupinstall "InfiniBand Support"
@@ -462,7 +465,7 @@ if [[ "${enable_infiniband}" == "true" ]]; then
 *       hard    memlock         unlimited
 " > ${node_chroot}/etc/security/limits.d/rdma.conf
 
-    chroot ${node_chroot} systemctl enable rdma
+    chroot ${node_chroot} systemctl enable rdma.service
 fi
 
 
@@ -487,7 +490,7 @@ tos orphan 5
 
 " >> ${node_chroot}/etc/ntp.conf
 
-chroot ${node_chroot} systemctl enable ntpd
+chroot ${node_chroot} systemctl enable ntpd.service
 
 
 # NFS mounts
@@ -554,13 +557,13 @@ chroot ${node_chroot} update-pciids
 yum -y groupinstall ohpc-ganglia
 yum -y --installroot=${node_chroot} install ganglia-gmond-ohpc
 
-systemctl enable gmond
-systemctl enable gmetad
+systemctl enable gmond.service
+systemctl enable gmetad.service
 
-systemctl start gmond
-systemctl start gmetad
+systemctl start gmond.service
+systemctl start gmetad.service
 
-chroot ${node_chroot} systemctl enable gmond
+chroot ${node_chroot} systemctl enable gmond.service
 
 for i in httpd apache2; do
     if [ -d /etc/$i ]; then
@@ -568,7 +571,7 @@ for i in httpd apache2; do
     fi
 done
 
-systemctl try-restart httpd
+systemctl try-restart httpd.service
 
 
 
@@ -673,8 +676,8 @@ wwsh -y provision set "${compute_regex}" \
      --files=dynamic_hosts,passwd,group,shadow,slurm.conf,munge.key
 
 # Restart ganglia services to pick up hostfile changes
-systemctl restart gmond
-systemctl restart gmetad
+systemctl restart gmond.service
+systemctl restart gmetad.service
 
 # Optionally, define IPoIB network settings (required if planning to mount Lustre over IB)
 if [ ${enable_infiniband} -eq 1 ];then
@@ -688,7 +691,7 @@ if [ ${enable_infiniband} -eq 1 ];then
 fi
 
 # Ensure the new node bootup settings have taken effect
-systemctl restart dhcpd
+systemctl restart dhcpd.service
 wwsh pxe update
 
 # Optionally, add arguments to bootstrap kernel
@@ -776,18 +779,10 @@ yum -y groupinstall ohpc-trilinos
 ################################################################################
 
 # Start up the first few nodes
-pdsh -w ${compute_node_name_prefix}[1-4] systemctl enable munge
-pdsh -w ${compute_node_name_prefix}[1-4] systemctl start munge
-pdsh -w ${compute_node_name_prefix}[1-4] systemctl enable slurm
-pdsh -w ${compute_node_name_prefix}[1-4] systemctl start slurm
 scontrol update nodename=${compute_node_name_prefix}[1-4] state=idle
 
 # If all looks good, start up the remainder of the nodes
 if [ ${compute_node_count} -gt 4 ];then
-    pdsh -w ${compute_node_name_prefix}[5-$compute_node_count] systemctl enable munge
-    pdsh -w ${compute_node_name_prefix}[5-$compute_node_count] systemctl start munge
-    pdsh -w ${compute_node_name_prefix}[5-$compute_node_count] systemctl enable slurm
-    pdsh -w ${compute_node_name_prefix}[5-$compute_node_count] systemctl start slurm
     scontrol update nodename=${compute_node_name_prefix}[5-$compute_node_count] state=idle
 fi
 
@@ -796,9 +791,46 @@ fi
 ################################################################################
 # Install MongoDB database (required for MCMS management/monitoring tools)
 ################################################################################
-yum install mongodb mongodb-server python-pymongo
-systemctl enable mongod
-systemctl start mongod
+echo "
+[mongodb-org-3.0]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/3.0/x86_64/
+gpgcheck=0
+enabled=1
+" > /etc/yum.repos.d/mongodb-org-3.0.repo
+yum -y install mongodb-org python-pymongo
+systemctl enable mongod.service
+systemctl start mongod.service
+
+# Secure MongoDB by adding an administrative user
+echo "use admin
+db.createUser(
+    {
+        user: 'root',
+        pwd: '${db_root_password}',
+        roles: [ { role: 'userAdminAnyDatabase', db: 'admin' } ]
+    }
+)
+" | mongo
+
+# Create a user for MCMS administration
+echo "use mcms
+db.createUser(
+    {
+        user: 'mcmsDBAdmin',
+        pwd: '${db_mgmt_password}',
+        roles: [ { role: 'dbOwner', db: 'mcms' } ]
+    }
+)" | mongo
+
+# Restart MongoDB to turn on authentication
+sed -i -e 's/^#security:/security:\n  authorization: enabled\n/' /etc/mongod.conf
+systemctl restart mongod.service
+
+# MongoDB administration can now be performed from the command line with:
+#
+#   mongo -u root -p --authenticationDatabase "admin"
+#
 
 
 
