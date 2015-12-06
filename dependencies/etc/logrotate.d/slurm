@@ -1,8 +1,16 @@
 /var/log/slurm/*.log {
         weekly
-        rotate 7
-        copytruncate
         compress
         missingok
+        nocopytruncate
+        nodelaycompress
+        nomail
         notifempty
+        noolddir
+        rotate 7
+        sharedscripts
+        size 10M
+        postrotate
+            /etc/init.d/slurm reconfig
+        endscript
 }
