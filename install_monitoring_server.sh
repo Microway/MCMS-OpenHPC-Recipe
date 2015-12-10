@@ -170,131 +170,13 @@ groupadd hpc-admin
 
 
 ################################################################################
-# Install the Open Monitoring Distribution (Shinken/Thruk/Check_MK)
+# Install the monitoring tools (Shinken/Thruk/Check_MK)
 ################################################################################
-rpm -Uvh "https://labs.consol.de/repo/stable/rhel7/x86_64/labs-consol-stable.rhel7.noarch.rpm"
-yum -y install omd-2.10-labs-edition libdbi
+useradd --system shinken --home-dir /tmp --no-create-home
 
-# Create a monitoring 'site' for this cluster
-/opt/omd/versions/default/bin/omd create hpc_monitor
+yum install python-pip
+pip install shinken
 
-su -c "omd config set ADMIN_MAIL"                               - hpc_monitor
-su -c "omd config set APACHE_MODE own"                          - hpc_monitor
-su -c "omd config set APACHE_TCP_ADDR 127.0.0.1"                - hpc_monitor
-su -c "omd config set APACHE_TCP_PORT 5000"                     - hpc_monitor
-su -c "omd config set AUTOSTART on"                             - hpc_monitor
-su -c "omd config set CORE shinken"                             - hpc_monitor
-su -c "omd config set CRONTAB on"                               - hpc_monitor
-su -c "omd config set DEFAULT_GUI thruk"                        - hpc_monitor
-su -c "omd config set DOKUWIKI_AUTH off"                        - hpc_monitor
-su -c "omd config set GRAFANA on"                               - hpc_monitor
-su -c "omd config set GRAFANA_TCP_PORT 8003"                    - hpc_monitor
-su -c "omd config set INFLUXDB on"                              - hpc_monitor
-su -c "omd config set INFLUXDB_ADMIN_TCP_PORT 8083"             - hpc_monitor
-su -c "omd config set INFLUXDB_HTTP_TCP_PORT 8086"              - hpc_monitor
-su -c "omd config set INFLUXDB_META_TCP_PORT 8088"              - hpc_monitor
-su -c "omd config set LIVESTATUS_TCP off"                       - hpc_monitor
-su -c "omd config set MKEVENTD off"                             - hpc_monitor
-su -c "omd config set MOD_GEARMAN off"                          - hpc_monitor
-su -c "omd config set MONGODB on"                               - hpc_monitor
-su -c "omd config set MONGODB_TCP_PORT 27017"                   - hpc_monitor
-su -c "omd config set MULTISITE_AUTHORISATION off"              - hpc_monitor
-su -c "omd config set MULTISITE_COOKIE_AUTH off"                - hpc_monitor
-su -c "omd config set MYSQL off"                                - hpc_monitor
-su -c "omd config set NAGFLUX on"                               - hpc_monitor
-su -c "omd config set NAGVIS_URLS check_mk"                     - hpc_monitor
-su -c "omd config set NSCA off"                                 - hpc_monitor
-su -c "omd config set PNP4NAGIOS off"                           - hpc_monitor
-su -c "omd config set SHINKEN_ARBITER_PORT localhost:7770"      - hpc_monitor
-su -c "omd config set SHINKEN_BROKER_PORT localhost:7772"       - hpc_monitor
-su -c "omd config set SHINKEN_POLLER_PORT localhost:7771"       - hpc_monitor
-su -c "omd config set SHINKEN_REACTIONNER_PORT localhost:7769"  - hpc_monitor
-su -c "omd config set SHINKEN_SCHEDULER_PORT localhost:7768"    - hpc_monitor
-su -c "omd config set SHINKEN_WEBUI_TCP_PORT 57767"             - hpc_monitor
-su -c "omd config set THRUK_COOKIE_AUTH on"                     - hpc_monitor
-su -c "omd config set TMPFS on"                                 - hpc_monitor
+systemctl enable shinken.service
+systemctl start shinken.service
 
-# Initialize the monitoring services and web interfaces
-omd start hpc_monitor
-
-# The default web UI will now be is available at:
-#
-#   http://localhost/microway_hpc/
-#
-#
-# The default admin user for the web applications is omdadmin with password omd.
-#
-#
-# Run the following command for administration of this site:
-#
-#    su - microway_hpc
-#
-#
-# Then you can run things such as:
-#
-#    omd config show
-#
-
-
-# Fix a bug in OMD - make sure it knows Shinken is managing the Nagios config
-if [[ ! -f /omd/sites/hpc_monitor/tmp/nagios/nagios.cfg ]]; then
-    ln -s /omd/sites/hpc_monitor/tmp/shinken/shinken-apache.cfg   \
-          /omd/sites/hpc_monitor/tmp/nagios/nagios.cfg
-    chown hpc_monitor:hpc_monitor /omd/sites/hpc_monitor/tmp/nagios/nagios.cfg
-fi
-
-
-# Enable compatibility between Shinken and Check_MK
-echo "check_submission = 'pipe'" >> /omd/sites/hpc_monitor/etc/check_mk/main.mk
-
-
-# Set up authentication for Shinken
-echo "define contact {
-    contact_name                  omdadmin
-    alias                         omdadmin admin contact
-    host_notification_commands    check-mk-dummy
-    service_notification_commands check-mk-dummy
-    host_notification_options     n
-    service_notification_options  n
-    host_notification_period      24X7
-    service_notification_period   24X7
-}
-
-define contactgroup {
-    contactgroup_name             omdadmin
-    alias                         omdadmin admin contact group
-    members                       omdadmin
-}" > /omd/sites/hpc_monitor/etc/nagios/conf.d/contact.cfg
-chown hpc_monitor:hpc_monitor /omd/sites/hpc_monitor/etc/nagios/conf.d/contact.cfg
-
-
-# Connect Shinken's webui with MongoDB
-echo "define module{
-    module_name      WebUI
-    module_type      webui
-    host             0.0.0.0       ; mean all interfaces
-    port             7767
-    auth_secret      ${db_mgmt_password}
-    # Advanced options. Do not touch it if you don't
-    # know what you are doing
-    #http_backend    wsgiref
-    # ; can be also : cherrypy, paste, tornado, twisted
-    # ; or gevent
-    modules          Apache_passwd,Mongodb
-    # Modules for the WebUI.
-}
-define module{
-    module_name      Apache_passwd
-    module_type      passwd_webui
-    passwd           /omd/sites/hpc_monitor/etc/htpasswd
-}
-define module{
-  module_name Mongodb
-  module_type mongodb
-  uri mongodb://localhost:27017
-  database shinken
-}" > /omd/sites/hpc_monitor/etc/shinken/shinken-specific.d/module_webui.cfg
-
-
-# Restart the services for the changes to take effect
-omd restart hpc_monitor
