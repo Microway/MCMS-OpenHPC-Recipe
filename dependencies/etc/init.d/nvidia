@@ -1,0 +1,189 @@
+#!/bin/bash
+#
+# nvidia    Set up NVIDIA GPU Compute Accelerators
+#
+# chkconfig: 2345 55 25
+# description:    NVIDIA GPUs provide additional compute capability. \
+#    This service sets the GPUs into the desired state.
+#
+# config: /etc/sysconfig/nvidia
+
+### BEGIN INIT INFO
+# Provides: nvidia
+# Required-Start: $local_fs $network $syslog
+# Required-Stop: $local_fs $syslog
+# Should-Start: $syslog
+# Should-Stop: $network $syslog
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Set GPUs into the desired state
+# Description:    NVIDIA GPUs provide additional compute capability.
+#    This service sets the GPUs into the desired state.
+### END INIT INFO
+
+
+################################################################################
+######################## Microway Cluster Management Software (MCMS) for OpenHPC
+################################################################################
+#
+# Copyright (c) 2015 by Microway, Inc.
+#
+# This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
+#
+#    MCMS for OpenHPC is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    MCMS for OpenHPC is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with MCMS.  If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+# Some definitions to make the below more readable
+NVSMI=/usr/bin/nvidia-smi
+NVCONFIG=/etc/sysconfig/nvidia
+prog="nvidia"
+
+# default settings
+NVIDIA_ACCOUNTING=1
+NVIDIA_PERSISTENCE_MODE=1
+NVIDIA_COMPUTE_MODE=0
+# pull in sysconfig settings
+[ -f $NVCONFIG ] && . $NVCONFIG
+
+RETVAL=0
+
+
+# Determine the maximum graphics and memory clock speeds for each GPU.
+# Create an array of clock speed pairs (memory,graphics) to be passed to nvidia-smi
+declare -a MAX_CLOCK_SPEEDS
+get_max_clocks()
+{
+    GPU_QUERY="$NVSMI --query-gpu=clocks.max.memory,clocks.max.graphics --format=csv,noheader,nounits"
+
+    MAX_CLOCK_SPEEDS=( $($GPU_QUERY | awk '{print $1 $2}') )
+}
+
+
+start()
+{
+    echo -n $"Starting $prog: "
+    [ -x $NVSMI ] || exit 5
+    [ -f $NVCONFIG ] || exit 6
+
+    # Set persistence mode first to speed things up
+    echo -n "persistence"
+    $NVSMI --persistence-mode=$NVIDIA_PERSISTENCE_MODE 1> /dev/null
+    RETVAL=$?
+
+    if [ ! $RETVAL -gt 0 ]; then
+        echo -n " accounting"
+        $NVSMI --accounting-mode=$NVIDIA_ACCOUNTING 1> /dev/null
+        RETVAL=$?
+    fi
+
+    if [ ! $RETVAL -gt 0 ]; then
+        echo -n " compute"
+        $NVSMI --compute-mode=$NVIDIA_COMPUTE_MODE 1> /dev/null
+        RETVAL=$?
+    fi
+
+    if [ ! $RETVAL -gt 0 ]; then
+        echo -n " clocks"
+        if [ -n "$NVIDIA_CLOCK_SPEEDS" ]; then
+            # If the requested clock speed value is "max",
+            # work through each GPU and set to max speed.
+            if [ "$NVIDIA_CLOCK_SPEEDS" == "max" ]; then
+                get_max_clocks
+
+                GPU_COUNTER=0
+                while [ "$GPU_COUNTER" -lt ${#MAX_CLOCK_SPEEDS[*]} ] && [ ! $RETVAL -gt 0 ]; do
+                    $NVSMI -i $GPU_COUNTER --applications-clocks=${MAX_CLOCK_SPEEDS[$GPU_COUNTER]} 1> /dev/null
+                    RETVAL=$?
+
+                    GPU_COUNTER=$(( $GPU_COUNTER + 1 ))
+                done
+            else
+                # This sets all GPUs to the same clock speeds (which only works
+                # if the GPUs in this system are all the same).
+                $NVSMI --applications-clocks=$NVIDIA_CLOCK_SPEEDS 1> /dev/null
+            fi
+        else
+            $NVSMI --reset-applications-clocks 1> /dev/null
+        fi
+        RETVAL=$?
+    fi
+
+    if [ ! $RETVAL -gt 0 ]; then
+        if [ -n "$NVIDIA_POWER_LIMIT" ]; then
+            echo -n " power-limit"
+            $NVSMI --power-limit=$NVIDIA_POWER_LIMIT 1> /dev/null
+            RETVAL=$?
+        fi
+    fi
+
+    if [ ! $RETVAL -gt 0 ]; then
+        success
+    else
+        failure
+    fi
+    echo
+    return $RETVAL
+}
+
+stop()
+{
+    echo -n $"Stopping $prog: "
+    [ -x $NVSMI ] || exit 5
+
+    $NVSMI --persistence-mode=0 1> /dev/null && success || failure
+    RETVAL=$?
+    echo
+    return $RETVAL
+}
+
+restart() {
+    stop
+    start
+}
+
+force_reload() {
+    restart
+}
+
+status() {
+    $NVSMI
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        restart
+        ;;
+    force-reload)
+        force_reload
+        ;;
+    status)
+        status
+        RETVAL=$?
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart|force-reload|status}"
+        RETVAL=2
+esac
+exit $RETVAL

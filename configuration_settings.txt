@@ -52,6 +52,9 @@ db_mgmt_password="ChangeMe"
 bmc_username="wwipmi"
 bmc_password="ChangeMe"
 
+# A mail server to which the cluster may forward notices, alerts, etc.
+# Most commonly, this will be the mail server used on your internal network.
+mail_server="mailserver.example.com"
 
 
 ################################################################################

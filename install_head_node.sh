@@ -104,6 +104,12 @@ yum -y install epel-release
 
 
 ################################################################################
+# Install tools we'll need during the setup
+################################################################################
+yum -y install python-pip
+
+
+################################################################################
 # If enabled, disable auto-update on the Head Node.
 # The compute nodes don't have yum installed.
 ################################################################################
@@ -527,8 +533,9 @@ echo "
 # WARNING: the values below were configured and set for your cluster. Changing
 # these values after the fact can break the cluster - take care.
 #
-# Specific items which you should watch out for:
+# Specific examples of changes which *will* break your cluster:
 #
+#   * changing the name of any server listed in this file
 #   * more than one line for any particular host name (e.g., head)
 #   * more than one line for any one IP address (e.g., 127.0.0.1)
 #
@@ -844,6 +851,75 @@ wwsh file resync passwd shadow group
 
 
 ################################################################################
+# Install NVIDIA CUDA (including the NVIDIA drivers)
+################################################################################
+
+# Determine the architecture of the system (e.g., x86_64)
+machine_type=$(uname --processor)
+
+curl -o cuda-repo-rhel7-7.5-18.x86_64.rpm http://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-repo-rhel7-7.5-18.x86_64.rpm
+
+# Install the CUDA repo on the Head Node and Compute Node image
+rpm -i cuda-repo-rhel7-7.5-18.x86_64.rpm
+mv cuda-repo-rhel7-7.5-18.x86_64.rpm ${node_chroot}/
+chroot ${node_chroot} rpm -i /cuda-repo-rhel7-7.5-18.x86_64.rpm
+rm -f ${node_chroot}/cuda-repo-rhel7-7.5-18.x86_64.rpm
+
+# Run the installer on the Head Node and Compute Node image
+yum --disablerepo="*" --enablerepo="cuda" list available
+yum clean all
+yum -y install cuda-7-0 cuda-7-5
+yum -y --installroot ${node_chroot} install cuda-7-0 cuda-7-5
+
+# NVIDIA is naughty and sets a fixed path to CUDA using a symlink.
+# This will get in the way when users want to switch from the default version.
+rm -f /usr/local/cuda ${node_chroot}/usr/local/cuda
+
+# Build the CUDA samples (though some will not build without other deps)
+for version in 7.0 7.5; do
+    echo "Building CUDA $version samples..."
+    cp -a /usr/local/cuda-${version}/samples /usr/local/cuda-${version}/tmp-build
+    cd /usr/local/cuda-${version}/tmp-build
+    make -j8
+    mv bin/${machine_type}/linux/release ../samples-bin
+    cd -
+    rm -Rf /usr/local/cuda-${version}/tmp-build
+
+    # Copy to compute node
+    cp -a /usr/local/cuda-${version}/samples-bin ${node_chroot}/usr/local/cuda-${version}/
+done
+
+# Install the GPU monitoring/management tools
+yum -y install gpu-deployment-kit
+yum -y --installroot ${node_chroot} install gpu-deployment-kit
+pip install nvidia-ml-py
+
+# Install scripts/configuration to bring up the GPUs during boot
+cp -a ${dependencies_dir}/etc/init.d/nvidia /etc/init.d/nvidia
+cp -a ${dependencies_dir}/etc/init.d/nvidia ${node_chroot}/etc/init.d/nvidia
+cp -a ${dependencies_dir}/etc/sysconfig/nvidia /etc/sysconfig/nvidia
+cp -a ${dependencies_dir}/etc/sysconfig/nvidia ${node_chroot}/etc/sysconfig/nvidia
+# By default, we'll assume we're not bringing up GPUs in the Head Node
+chroot ${node_chroot} systemctl enable nvidia.service
+chroot ${node_chroot} systemctl start nvidia.service
+
+# Put the GPU health check settings in place
+cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf /etc/
+cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf ${node_chroot}/etc/
+
+# FIXME: needs to be revised for the OpenHPC module hierarchy
+# # Set up the Environment Modules for these versions of CUDA
+# mkdir -p ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda
+# for version in 7.0 7.5; do
+#   cp -a ${dependencies_dir}/modulefiles/core/cuda.lua ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
+#   sed -i "s/{cuda-version}/${version}/" ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
+#   sed -i "s/{architecture/${machine_type}/" ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
+# done
+# (cd ${dependencies_dir}/modulefiles/Core/cuda/ && ln -s 7.5.lua default)
+
+
+
+################################################################################
 # Install commonly used tools on the Head Node and Compute Nodes
 #
 # It's better for the cluster if packages can be compiled on the compute nodes
@@ -852,6 +928,8 @@ wwsh file resync passwd shadow group
 # installation, including development packages.
 #
 ################################################################################
+
+# TODO: need new source for memtester
 
 declare -A mcms_package_selections
 mcms_package_selections['global']="
@@ -865,7 +943,6 @@ mcms_package_selections['global']="
     hwloc hwloc-devel
     ipmitool
     mcelog
-    memtester
     numactl numactl-devel
     OpenIPMI
 
@@ -885,9 +962,10 @@ mcms_package_selections['global']="
     rubygems
     screen
     smem
+    strace
     tcsh
     tree
-    unrar
+    p7zip
     unzip
     vim
     xemacs
@@ -896,7 +974,7 @@ mcms_package_selections['global']="
 
     dvipng
     firefox
-    gnuplot gnuplot-py
+    gnuplot
     graphviz graphviz-devel
     ImageMagick
     rrdtool rrdtool-devel
@@ -954,7 +1032,7 @@ mcms_package_selections['development']="
     webkitgtk webkitgtk-devel
 "
 mcms_package_selections['head_node']="
-    xfsdump xfsprogs yum-downloadonly
+    xfsdump xfsprogs yum-utils
 "
 mcms_package_selections['compute_node']=""
 
@@ -968,7 +1046,33 @@ yum -y --installroot=${node_chroot} install              \
                ${mcms_package_selections['development']} \
                ${mcms_package_selections['compute_node']}
 
+# Packages which can't be installed via yum
+pip install gnuplot-py
+chroot ${node_chroot} pip install gnuplot-py
+
+# Clear out the random entries from chrooting into the compute node environment
+> ${node_chroot}/root/.bash_history
+
 # Re-assemble compute node VNFS with all the software changes
 wwvnfs -y --chroot ${node_chroot}
+
+
+
+################################################################################
+# Set up mail forwarding (on systems which need to alert admins)
+################################################################################
+echo "transport_maps = hash:/etc/postfix/transport" >> /etc/postfix/main.cf
+echo "*    smtp:${mail_server}" >> /etc/postfix/transport
+postmap hash:/etc/postfix/transport
+
+# If necessary, specific user accounts, such as root@cluster.domain.edu can be
+# redirected to an admin account via the virtual maps:
+#
+#   echo "root@head.hpc.example.com admin@example.com" >> /etc/postfix/virtual
+#   postmap /etc/postfix/virtual
+#   echo "virtual_alias_maps = hash:/etc/postfix/virtual" >> /etc/postfix/main.cf
+#
+
+postfix reload
 
 

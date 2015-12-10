@@ -1,0 +1,109 @@
+################################################################################
+######################## Microway Cluster Management Software (MCMS) for OpenHPC
+################################################################################
+#
+# Copyright (c) 2015 by Microway, Inc.
+#
+# This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
+#
+#    MCMS for OpenHPC is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    MCMS for OpenHPC is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with MCMS.  If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
+
+# Define start-up configuration settings for NVIDIA GPUs.
+# These settings are enabled by the 'nvidia' init.d service.
+
+
+# Supported products:
+# - Full Support
+#     - NVIDIA Tesla Line:     Fermi, Kepler and later generations
+#     - NVIDIA Quadro Line:    Fermi, Kepler and later generations
+#     - NVIDIA GRID Line:      All generations
+#     - NVIDIA GeForce Line:   None
+#
+# - Limited Support
+#     - NVIDIA Tesla and Quadro Line:   Generations before Fermi-architecture
+#     - NVIDIA GeForce Line
+
+
+# Enables or disables GPU Accounting. With GPU Accounting one can keep track of
+# usage of resources throughout the lifespan of each process running on the GPU.
+#
+# Accounting data can be queried by any user. Execute:
+#     nvidia-smi -q -d ACCOUNTING
+#
+# Set accounting:
+#     0/DISABLED, 1/ENABLED
+#
+NVIDIA_ACCOUNTING=1
+
+# A flag that indicates whether persistence mode is enabled for the GPU. Value
+# is either "Enabled" or "Disabled". When persistence mode is enabled the NVIDIA
+# driver remains loaded even when no active clients, such as X11 or nvidia-smi,
+# exist. This minimizes the driver load latency associated with running
+# dependent apps, such as CUDA programs. There is a modest power usage penalty.
+#
+# Set persistence mode:
+#     0/DISABLED, 1/ENABLED
+#
+NVIDIA_PERSISTENCE_MODE=1
+
+
+# The compute mode flag indicates whether individual or multiple compute
+# applications may run on the GPU.
+#
+# "Default" means multiple contexts are allowed per device.
+#
+# "Exclusive Thread" means only one context is allowed per device, usable from
+# one thread at a time.
+#
+# "Exclusive Process" means only one context is allowed per device, usable from
+# multiple threads at a time.
+#
+# "Prohibited" means no contexts are allowed per device (no compute apps).
+#
+# "EXCLUSIVE_PROCESS"  was  added  in  CUDA  4.0.   Prior  CUDA  releases
+# supported only one exclusive mode, which is equivalent to "EXCLUSIVE_THREAD"
+# in CUDA 4.0 and beyond.
+#
+# Set MODE for compute applications:
+#     0/DEFAULT, 1/EXCLUSIVE_THREAD,
+#     2/PROHIBITED, 3/EXCLUSIVE_PROCESS
+#
+NVIDIA_COMPUTE_MODE=0
+
+
+# Specifies maximum <memory,graphics> clocks as a pair (e.g. 2000,800)
+# that defines GPU’s speed while running applications on a GPU. Values need to
+# be one of the available options as reported by:
+#
+#    nvidia-smi -q -d SUPPORTED_CLOCKS
+#
+# If set to value "max" the maximum speed of each GPU will be queried and set.
+#
+# If not set, default clock speeds are used.
+#
+#NVIDIA_CLOCK_SPEEDS=3004,875
+NVIDIA_CLOCK_SPEEDS=max
+
+
+# Specifies maximum power limit (in watts). Accepts integer and floating point
+# numbers. Value needs to be between Min and Max Power Limit as reported by:
+#
+#    nvidia-smi --query-gpu=power.min_limit,power.max_limit --format=csv
+#
+# If not set, GPUs will run at their normal TDP
+#
+#NVIDIA_POWER_LIMIT=200
