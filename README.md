@@ -1,5 +1,7 @@
 # MCMS for OpenHPC Recipe
 
+[![Join the chat at https://gitter.im/Microway/MCMS-OpenHPC-Recipe](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Microway/MCMS-OpenHPC-Recipe?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 ## This is an experimental work in progress - it is not ready for production
 
 MCMS is Microway's Cluster Management Software. This is not the production-ready
