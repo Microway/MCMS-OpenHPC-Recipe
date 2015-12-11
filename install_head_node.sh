@@ -34,7 +34,8 @@
 ## This script should be run on the cluster's Head/Master Node - also referred
 ## to as the System Management Server (SMS). This script presumes that a Red Hat
 ## derivative (CentOS, SL, etc) has just been installed (with vanilla
-## configuration). It builds a node image with support for InfiniBand and GPUs.
+## configuration). It builds a ready-to-run compute node image with optional
+## support for InfiniBand, NVIDIA GPUs and Xeon Phi coprocessors.
 ##
 ##
 ## Please note that certain design/configuration choices are made by this script
@@ -515,7 +516,7 @@ wwsh file import /etc/shadow
 wwsh file import /etc/slurm/slurm.conf
 wwsh file import /etc/munge/munge.key
 
-if [ ${enable_infiniband} == "true" ];then
+if [ "${enable_infiniband}" == "true" ];then
     wwsh file import /opt/ohpc/pub/examples/network/centos/ifcfg-ib0.ww
     wwsh -y file set ifcfg-ib0.ww --path=/etc/sysconfig/network-scripts/ifcfg-ib0
 fi
@@ -593,7 +594,7 @@ yum -y --installroot=${node_chroot} install intel-clck-ohpc
 ################################################################################
 # If desired, configure the Lustre parallel filesystem mount
 ################################################################################
-if [ ${enable_lustre_client} -eq 1 ];then
+if [ "${enable_lustre_client}" == "true" ];then
     # Install Lustre client on master
     yum -y install lustre-client-ohpc lustre-client-ohpc-modules
 
@@ -643,17 +644,28 @@ echo "
 # twice that of physical memory.
 modprobe += mlx4_core log_num_mtt=25 log_mtts_per_seg=1, ib_srp
 
+# Required to load Lustre client
+drivers += updates/kernel/
+" >> /etc/warewulf/bootstrap.conf
+
+if [[ "${enable_phi_coprocessor}" == "true" ]]; then
+    echo "
+
 # Driver and bridging capability for Intel(R) Xeon Phi(tm) coprocessors
 drivers += extra/mic.ko
 drivers += bridge
+" >> /etc/warewulf/bootstrap.conf
+fi
+
+if [[ "${enable_nvidia_gpu}" == "true" ]]; then
+    echo "
 
 # Required for NVIDIA GPUs
 drivers += extra/nvidia.ko
 drivers += extra/nvidia-uvm.ko
-
-# Required to load Lustre client
-drivers += updates/kernel/
 " >> /etc/warewulf/bootstrap.conf
+fi
+
 
 # Update the bootstrap image for the current Linux kernel version
 wwbootstrap `uname -r`
@@ -687,7 +699,7 @@ systemctl restart gmond.service
 systemctl restart gmetad.service
 
 # Optionally, define IPoIB network settings (required if planning to mount Lustre over IB)
-if [ ${enable_infiniband} -eq 1 ];then
+if [ "${enable_infiniband}" == "true" ];then
     for ((i=0; i<$compute_node_count; i++)) ; do
         c_name=${compute_node_name_prefix}$(( ${i} + 1 ))
         wwsh -y node set ${c_name} --netdev=ib0              \
@@ -853,69 +865,123 @@ wwsh file resync passwd shadow group
 ################################################################################
 # Install NVIDIA CUDA (including the NVIDIA drivers)
 ################################################################################
+if [[ "${enable_nvidia_gpu}" == "true" ]]; then
+    # Determine the architecture of the system (e.g., x86_64)
+    machine_type=$(uname --processor)
 
-# Determine the architecture of the system (e.g., x86_64)
-machine_type=$(uname --processor)
+    curl -o cuda-repo-rhel7-7.5-18.x86_64.rpm http://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-repo-rhel7-7.5-18.x86_64.rpm
 
-curl -o cuda-repo-rhel7-7.5-18.x86_64.rpm http://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-repo-rhel7-7.5-18.x86_64.rpm
+    # Install the CUDA repo on the Head Node and Compute Node image
+    rpm -i cuda-repo-rhel7-7.5-18.x86_64.rpm
+    mv cuda-repo-rhel7-7.5-18.x86_64.rpm ${node_chroot}/
+    chroot ${node_chroot} rpm -i /cuda-repo-rhel7-7.5-18.x86_64.rpm
+    rm -f ${node_chroot}/cuda-repo-rhel7-7.5-18.x86_64.rpm
 
-# Install the CUDA repo on the Head Node and Compute Node image
-rpm -i cuda-repo-rhel7-7.5-18.x86_64.rpm
-mv cuda-repo-rhel7-7.5-18.x86_64.rpm ${node_chroot}/
-chroot ${node_chroot} rpm -i /cuda-repo-rhel7-7.5-18.x86_64.rpm
-rm -f ${node_chroot}/cuda-repo-rhel7-7.5-18.x86_64.rpm
+    # Run the installer on the Head Node and Compute Node image
+    yum --disablerepo="*" --enablerepo="cuda" list available
+    yum clean all
+    yum -y install cuda-7-0 cuda-7-5
+    yum -y --installroot ${node_chroot} install cuda-7-0 cuda-7-5
 
-# Run the installer on the Head Node and Compute Node image
-yum --disablerepo="*" --enablerepo="cuda" list available
-yum clean all
-yum -y install cuda-7-0 cuda-7-5
-yum -y --installroot ${node_chroot} install cuda-7-0 cuda-7-5
+    # NVIDIA is naughty and sets a fixed path to CUDA using a symlink.
+    # This will get in the way when users want to switch from the default version.
+    rm -f /usr/local/cuda ${node_chroot}/usr/local/cuda
 
-# NVIDIA is naughty and sets a fixed path to CUDA using a symlink.
-# This will get in the way when users want to switch from the default version.
-rm -f /usr/local/cuda ${node_chroot}/usr/local/cuda
+    # Build the CUDA samples (though some will not build without other deps)
+    for version in 7.0 7.5; do
+        echo "Building CUDA $version samples..."
+        cp -a /usr/local/cuda-${version}/samples /usr/local/cuda-${version}/tmp-build
+        cd /usr/local/cuda-${version}/tmp-build
+        make -j8
+        mv bin/${machine_type}/linux/release ../samples-bin
+        cd -
+        rm -Rf /usr/local/cuda-${version}/tmp-build
 
-# Build the CUDA samples (though some will not build without other deps)
-for version in 7.0 7.5; do
-    echo "Building CUDA $version samples..."
-    cp -a /usr/local/cuda-${version}/samples /usr/local/cuda-${version}/tmp-build
-    cd /usr/local/cuda-${version}/tmp-build
-    make -j8
-    mv bin/${machine_type}/linux/release ../samples-bin
-    cd -
-    rm -Rf /usr/local/cuda-${version}/tmp-build
+        # Copy to compute node
+        cp -a /usr/local/cuda-${version}/samples-bin ${node_chroot}/usr/local/cuda-${version}/
+    done
 
-    # Copy to compute node
-    cp -a /usr/local/cuda-${version}/samples-bin ${node_chroot}/usr/local/cuda-${version}/
-done
+    # Install the GPU monitoring/management tools
+    yum -y install gpu-deployment-kit
+    yum -y --installroot ${node_chroot} install gpu-deployment-kit
+    pip install nvidia-ml-py
 
-# Install the GPU monitoring/management tools
-yum -y install gpu-deployment-kit
-yum -y --installroot ${node_chroot} install gpu-deployment-kit
-pip install nvidia-ml-py
+    # Install scripts/configuration to bring up the GPUs during boot
+    cp -a ${dependencies_dir}/etc/init.d/nvidia /etc/init.d/nvidia
+    cp -a ${dependencies_dir}/etc/init.d/nvidia ${node_chroot}/etc/init.d/nvidia
+    cp -a ${dependencies_dir}/etc/sysconfig/nvidia /etc/sysconfig/nvidia
+    cp -a ${dependencies_dir}/etc/sysconfig/nvidia ${node_chroot}/etc/sysconfig/nvidia
+    # By default, we'll assume we're not bringing up GPUs in the Head Node
+    chroot ${node_chroot} systemctl enable nvidia.service
+    chroot ${node_chroot} systemctl start nvidia.service
 
-# Install scripts/configuration to bring up the GPUs during boot
-cp -a ${dependencies_dir}/etc/init.d/nvidia /etc/init.d/nvidia
-cp -a ${dependencies_dir}/etc/init.d/nvidia ${node_chroot}/etc/init.d/nvidia
-cp -a ${dependencies_dir}/etc/sysconfig/nvidia /etc/sysconfig/nvidia
-cp -a ${dependencies_dir}/etc/sysconfig/nvidia ${node_chroot}/etc/sysconfig/nvidia
-# By default, we'll assume we're not bringing up GPUs in the Head Node
-chroot ${node_chroot} systemctl enable nvidia.service
-chroot ${node_chroot} systemctl start nvidia.service
+    # Put the GPU health check settings in place
+    cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf /etc/
+    cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf ${node_chroot}/etc/
 
-# Put the GPU health check settings in place
-cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf /etc/
-cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf ${node_chroot}/etc/
+    # FIXME: needs to be revised for the OpenHPC module hierarchy
+    # # Set up the Environment Modules for these versions of CUDA
+    # mkdir -p ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda
+    # for version in 7.0 7.5; do
+    #   cp -a ${dependencies_dir}/modulefiles/core/cuda.lua ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
+    #   sed -i "s/{cuda-version}/${version}/" ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
+    #   sed -i "s/{architecture/${machine_type}/" ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
+    # done
+    # (cd ${dependencies_dir}/modulefiles/Core/cuda/ && ln -s 7.5.lua default)
+fi
 
-# FIXME: needs to be revised for the OpenHPC module hierarchy
-# # Set up the Environment Modules for these versions of CUDA
-# mkdir -p ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda
-# for version in 7.0 7.5; do
-#   cp -a ${dependencies_dir}/modulefiles/core/cuda.lua ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
-#   sed -i "s/{cuda-version}/${version}/" ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
-#   sed -i "s/{architecture/${machine_type}/" ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
-# done
-# (cd ${dependencies_dir}/modulefiles/Core/cuda/ && ln -s 7.5.lua default)
+
+
+################################################################################
+# Install Intel Xeon Phi coprocessor driver and tools
+################################################################################
+if [[ "${enable_phi_coprocessor}" == "true" ]]; then
+    intel_xeonphi_mpss="http://registrationcenter.intel.com/irc_nas/8202/mpss-3.6-linux.tar"
+    curl -o mpss-3.6-linux.tar ${intel_xeonphi_mpss}
+    tar xvf mpss-3.6-linux.tar
+    cd mpss-3.6/
+    yum -y install kernel-headers kernel-devel
+    cd src/
+    rpmbuild --rebuild mpss-modules*.src.rpm
+    cd ../
+    mv -v ~/rpmbuild/RPMS/x86_64/mpss-modules*$(uname -r)*.rpm modules/
+    yum install install modules/*.rpm
+    cd ../
+    modprobe mic
+
+    OFEDFORCE=1 CHROOTDIR=${node_chroot} wwinit MIC
+    yum --tolerant --installroot ${node_chroot} -y install warewulf-mic-node
+    rm -f mpss-3.6-linux.tar
+
+    # Double-check MPSS start-up on boot. Seems to be an issue.
+    echo "
+
+# If Xeon Phi coprocessors are present, double-check that MPSS has started
+if [[ -z "$(ps -e | awk '/mpssd/ {print $4}')" ]] && [[ -c /dev/mic0 ]]; then
+    systemctl start mpss
+fi
+
+    " >> ${node_chroot}/etc/rc.local
+
+    # Make sure root can login to the Xeon Phi
+    if [[ ! -f /root/.ssh/id_rsa ]]; then
+        ssh-keygen -d rsa
+        chmod 600 /root/.ssh/id_rsa
+    fi
+    cp -a /root/.ssh/id_rsa /root/.ssh/id_rsa.pub ${node_chroot}/root/.ssh/
+    cat /root/.ssh/id_rsa.pub >> ${node_chroot}/root/.ssh/authorized_keys
+    chmod 600 ${node_chroot}/root/.ssh/authorized_keys
+
+    wwsh mic set --lookup=groups phi --mic=1
+    wwsh provision set --lookup=groups phi --kargs="wwkmod=mic quiet"
+
+    # Allow Warewulf to set consecutive addresses for the Xeon Phi devices
+    wwsh node set --netdev=mic0 --ipaddr=10.100.0.0 --netmask=255.255.0.0
+
+    # Make sure that wwfirstboot is not disabled in the configuration file
+    # /etc/sysconfig/wwfirstboot.conf. Although wwfirstboot is mostly used for
+    # system provisioning, it is also used for Xeon Phi provisioning.
+fi
 
 
 
@@ -928,8 +994,6 @@ cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf ${node_chroot}/etc/
 # installation, including development packages.
 #
 ################################################################################
-
-# TODO: need new source for memtester
 
 declare -A mcms_package_selections
 mcms_package_selections['global']="

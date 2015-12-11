@@ -64,6 +64,13 @@ mail_server="mailserver.example.com"
 # Install InfiniBand drivers and tools
 enable_infiniband="true"
 
+# Install NVIDIA GPU drivers and tools
+enable_nvidia_gpu="true"
+
+# Install Intel Xeon Phi coprocessor drivers and tools
+# (disabled by default due to the additional steps necessary for Phi)
+enable_phi_coprocessor="false"
+
 # Restrict users from logging into any node via SSH (unless a job is running)
 restrict_user_ssh_logins="true"
 
