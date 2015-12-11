@@ -13,14 +13,24 @@ but offers a variety of customizations and enhancements, including:
   * Automated power-down of idle compute nodes
   * Support for Mellanox InfiniBand
   * Support for NVIDIA GPU accelerators
-  * Monitoring of many additional metrics *(WIP)*
-  * More sophisticated log collection and analysis *(WIP)*
-  * Nagios-compatible monitoring with a more modern interface *(WIP)*
+  * Monitoring of many additional metrics **(WIP)**
+  * More sophisticated log collection and analysis **(WIP)**
+  * Nagios-compatible monitoring with a more modern interface **(WIP)**
 
-Given a vanilla CentOS 7.x installation, this collection of scripts will stand
-up an OpenHPC cluster.
+### Installation
+*Given a vanilla CentOS 7.x installation, this collection of scripts will stand
+up an OpenHPC cluster. This script will be tested with fresh installations -
+attempting to run it on an installation that's had a lot of changes may break.*
+
+```
+# Use your favorite text editor to customize the install
+vim configuration_settings.txt
+
+# Run the installation on the new Head Node
+./install_head_node.sh
+```
 
 ### More Information
-To learn more about OpenHPC and view the official installation recipe, visit:
+To learn more about OpenHPC or to view the official installation recipe, visit:
 http://www.openhpc.community/
 
