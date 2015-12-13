@@ -270,6 +270,137 @@ systemctl restart nfs.service
 
 
 ################################################################################
+# Set up Warewulf access to the SQL database
+################################################################################
+mysqladmin create warewulf
+sed -i "s/database driver.*/database driver = mariadb/" /etc/warewulf/database.conf
+sed -i "s/database user.*/database user = warewulf/" /etc/warewulf/database-root.conf
+sed -i "s/database password.*/database password = ${db_mgmt_password}/" /etc/warewulf/database-root.conf
+echo "GRANT ALL ON warewulf.* TO 'warewulf'@'localhost' IDENTIFIED BY '${db_mgmt_password}';" \
+     "GRANT ALL ON warewulf.* TO 'warewulf'@'$(hostname)' IDENTIFIED BY '${db_mgmt_password}';" \
+     "GRANT ALL ON warewulf.* TO 'warewulf'@'$(hostname -s)' IDENTIFIED BY '${db_mgmt_password}';" \
+     "FLUSH PRIVILEGES;" \
+     | mysql -u root
+
+
+
+################################################################################
+# Create the Compute Node image with OpenHPC in Warewulf
+################################################################################
+
+# Initialize the compute node chroot installation
+export node_chroot=/opt/ohpc/admin/images/centos-7
+if [[ ! -z "${BOS_MIRROR}" ]]; then
+    sed -i -r "s#^YUM_MIRROR=(\S+)#YUM_MIRROR=${BOS_MIRROR}#" /usr/libexec/warewulf/wwmkchroot/centos-7.tmpl
+fi
+wwmkchroot centos-7 ${node_chroot}
+
+
+# Distribute root's SSH keys across the cluster
+wwinit ssh_keys
+cat ~/.ssh/cluster.pub >> ${node_chroot}/root/.ssh/authorized_keys
+
+
+# Revoke SSH access to all compute nodes (except for root and admins)
+if [[ "${restrict_user_ssh_logins}" == "true" ]]; then
+    yum -y --installroot=${node_chroot} install slurm-pam_slurm-ohpc
+    echo "
+- : ALL EXCEPT root hpc-admin : ALL
+"   >> ${node_chroot}/etc/security/access.conf
+    echo "
+# Reject users who do not have jobs running on this node
+account    required     pam_slurm.so
+"   >> ${node_chroot}/etc/pam.d/sshd
+fi
+
+
+# Copy DNS resolution settings to the node installation
+cp -p /etc/resolv.conf ${node_chroot}/etc/resolv.conf
+
+
+# Install necessary compute node daemons
+yum -y --installroot=${node_chroot} groupinstall ohpc-slurm-client
+yum -y --installroot=${node_chroot} install kernel lmod-ohpc ntp
+
+chroot ${node_chroot} systemctl enable munge.service
+chroot ${node_chroot} systemctl enable slurm.service
+
+
+if [[ "${enable_infiniband}" == "true" ]]; then
+    yum -y --installroot=${node_chroot} groupinstall "InfiniBand Support"
+    echo "
+# Allow user processes to pin more memory (required for InfiniBand/RDMA)
+*       soft    memlock         unlimited
+*       hard    memlock         unlimited
+" > ${node_chroot}/etc/security/limits.d/rdma.conf
+
+    chroot ${node_chroot} systemctl enable rdma.service
+fi
+
+
+# Configure NTP
+if [[ ! -z "${ntp_server}" ]]; then
+    sed -i 's/^server /#server /' ${node_chroot}/etc/ntp.conf
+    echo -e "
+
+server ${ntp_server}
+
+" >> ${node_chroot}/etc/ntp.conf
+fi
+
+echo "
+
+# Because some clusters are not connected to the Internet, we need to enable
+# orphan mode as described here:
+#
+#   https://www.eecis.udel.edu/~mills/ntp/html/miscopt.html#tos
+#
+tos orphan 5
+
+" >> ${node_chroot}/etc/ntp.conf
+
+chroot ${node_chroot} systemctl enable ntpd.service
+
+
+# NFS mounts
+echo "
+
+# NFS mounts from the Head Node
+${sms_ip}:/home         /home         nfs nfsvers=3,rsize=1024,wsize=1024,cto 0 0
+${sms_ip}:/opt/ohpc/pub /opt/ohpc/pub nfs nfsvers=3 0 0
+" >> ${node_chroot}/etc/fstab
+
+
+
+################################################################################
+# Add to the stub for the /etc/hosts file
+################################################################################
+echo "
+
+
+################################################################################
+#
+# WARNING: the values below were configured and set for your cluster. Changing
+# these values after the fact can break the cluster - take care.
+#
+# Specific examples of changes which *will* break your cluster:
+#
+#   * changing the name of any server listed in this file
+#   * more than one line for any particular host name (e.g., head)
+#   * more than one line for any one IP address (e.g., 127.0.0.1)
+#
+#
+# Also take note that the cluster will automatically add additional entries as
+# you add more compute nodes. In most cases, you do not need to edit this file.
+#
+################################################################################
+
+
+" >> /etc/hosts
+
+
+
+################################################################################
 # Install SLURM
 ################################################################################
 yum -y groupinstall ohpc-slurm-server
@@ -371,6 +502,7 @@ chmod 600 ${node_chroot}/root/.ssh/authorized_keys
 # Set up SQL database for slurmdbd accounting
 mysqladmin create slurm_acct_db
 echo "GRANT ALL ON slurm_acct_db.* TO 'slurm'@'localhost' IDENTIFIED BY '${db_mgmt_password}';" \
+     "GRANT ALL ON slurm_acct_db.* TO 'slurm'@'$(hostname)' IDENTIFIED BY '${db_mgmt_password}';" \
      "GRANT ALL ON slurm_acct_db.* TO 'slurm'@'$(hostname -s)' IDENTIFIED BY '${db_mgmt_password}';" \
      "FLUSH PRIVILEGES;" \
      | mysql -u root
@@ -395,18 +527,6 @@ sacctmgr add account ${cluster_acct_hierarchy['default_account']} \
 
 
 ################################################################################
-# Set up Warewulf access to the SQL database
-################################################################################
-mysqladmin create warewulf
-sed -i "s/database user.*/database user = warewulf/" /etc/warewulf/database-root.conf
-sed -i "s/database password.*/database password = ${db_mgmt_password}/" /etc/warewulf/database-root.conf
-echo "GRANT ALL ON warewulf.* TO 'warewulf'@'localhost' IDENTIFIED BY '${db_mgmt_password}';" \
-     "GRANT ALL ON warewulf.* TO 'warewulf'@'$(hostname -s)' IDENTIFIED BY '${db_mgmt_password}';" \
-     "FLUSH PRIVILEGES;" \
-     | mysql -u root
-
-
-################################################################################
 # Secure the SQL database
 ################################################################################
 echo "
@@ -418,136 +538,6 @@ y
 y
 y
 " | mysql_secure_installation
-
-
-
-
-################################################################################
-# Create the Compute Node image with OpenHPC in Warewulf
-################################################################################
-
-# Initialize the compute node chroot installation
-export node_chroot=/opt/ohpc/admin/images/centos-7
-if [[ ! -z "${BOS_MIRROR}" ]]; then
-    sed -i -r "s#^YUM_MIRROR=(\S+)#YUM_MIRROR=${BOS_MIRROR}#" /usr/libexec/warewulf/wwmkchroot/centos-7.tmpl
-fi
-wwmkchroot centos-7 ${node_chroot}
-
-
-# Distribute root's SSH keys across the cluster
-wwinit ssh_keys
-cat ~/.ssh/cluster.pub >> ${node_chroot}/root/.ssh/authorized_keys
-
-
-# Revoke SSH access to all compute nodes (except for root and admins)
-if [[ "${restrict_user_ssh_logins}" == "true" ]]; then
-    yum -y --installroot=${node_chroot} install slurm-pam_slurm-ohpc
-    echo "
-- : ALL EXCEPT root hpc-admin : ALL
-"   >> ${node_chroot}/etc/security/access.conf
-    echo "
-# Reject users who do not have jobs running on this node
-account    required     pam_slurm.so
-"   >> ${node_chroot}/etc/pam.d/sshd
-fi
-
-
-# Copy DNS resolution settings to the node installation
-cp -p /etc/resolv.conf ${node_chroot}/etc/resolv.conf
-
-
-# Install necessary compute node daemons
-yum -y --installroot=${node_chroot} groupinstall ohpc-slurm-client
-yum -y --installroot=${node_chroot} install kernel lmod-ohpc ntp
-
-chroot ${node_chroot} systemctl enable munge.service
-chroot ${node_chroot} systemctl enable slurm.service
-
-
-if [[ "${enable_infiniband}" == "true" ]]; then
-    yum -y --installroot=${node_chroot} groupinstall "InfiniBand Support"
-    echo "
-# Allow user processes to pin more memory (required for InfiniBand/RDMA)
-*       soft    memlock         unlimited
-*       hard    memlock         unlimited
-" > ${node_chroot}/etc/security/limits.d/rdma.conf
-
-    chroot ${node_chroot} systemctl enable rdma.service
-fi
-
-
-# Configure NTP
-if [[ ! -z "${ntp_server}" ]]; then
-    sed -i 's/^server /#server /' ${node_chroot}/etc/ntp.conf
-    echo -e "
-
-server ${ntp_server}
-
-" >> ${node_chroot}/etc/ntp.conf
-fi
-
-echo "
-
-# Because some clusters are not connected to the Internet, we need to enable
-# orphan mode as described here:
-#
-#   https://www.eecis.udel.edu/~mills/ntp/html/miscopt.html#tos
-#
-tos orphan 5
-
-" >> ${node_chroot}/etc/ntp.conf
-
-chroot ${node_chroot} systemctl enable ntpd.service
-
-
-# NFS mounts
-echo "
-
-# NFS mounts from the Head Node
-${sms_ip}:/home         /home         nfs nfsvers=3,rsize=1024,wsize=1024,cto 0 0
-${sms_ip}:/opt/ohpc/pub /opt/ohpc/pub nfs nfsvers=3 0 0
-" >> ${node_chroot}/etc/fstab
-
-
-# Link the files which will be automatically synced to the nodes periodically
-wwsh file import /etc/passwd
-wwsh file import /etc/group
-wwsh file import /etc/shadow
-wwsh file import /etc/slurm/slurm.conf
-wwsh file import /etc/munge/munge.key
-
-if [ "${enable_infiniband}" == "true" ];then
-    wwsh file import /opt/ohpc/pub/examples/network/centos/ifcfg-ib0.ww
-    wwsh -y file set ifcfg-ib0.ww --path=/etc/sysconfig/network-scripts/ifcfg-ib0
-fi
-
-
-
-################################################################################
-# Add to the stub for the /etc/hosts file
-################################################################################
-echo "
-
-
-################################################################################
-#
-# WARNING: the values below were configured and set for your cluster. Changing
-# these values after the fact can break the cluster - take care.
-#
-# Specific examples of changes which *will* break your cluster:
-#
-#   * changing the name of any server listed in this file
-#   * more than one line for any particular host name (e.g., head)
-#   * more than one line for any one IP address (e.g., 127.0.0.1)
-#
-#
-# Also take note that the cluster will automatically add additional entries as
-# you add more compute nodes. In most cases, you do not need to edit this file.
-#
-################################################################################
-
-
-" >> /etc/hosts
 
 
 
@@ -671,8 +661,22 @@ fi
 wwbootstrap `uname -r`
 
 
+# Link the files which will be automatically synced to the nodes periodically
+wwsh file import /etc/passwd
+wwsh file import /etc/group
+wwsh file import /etc/shadow
+wwsh file import /etc/slurm/slurm.conf
+wwsh file import /etc/munge/munge.key
+
+if [ "${enable_infiniband}" == "true" ];then
+    wwsh file import /opt/ohpc/pub/examples/network/centos/ifcfg-ib0.ww
+    wwsh -y file set ifcfg-ib0.ww --path=/etc/sysconfig/network-scripts/ifcfg-ib0
+fi
+
+
 # Assemble VNFS
 wwvnfs -y --chroot ${node_chroot}
+
 
 # Add the compute node hosts to the cluster
 for ((i=0; i<$compute_node_count; i++)) ; do
@@ -1087,6 +1091,7 @@ mcms_package_selections['development']="
     pcre-devel
     pygtk2
     python-devel
+    python-pip
     readline-devel
     SDL SDL-devel
     snappy-devel
