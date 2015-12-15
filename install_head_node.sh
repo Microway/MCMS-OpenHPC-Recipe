@@ -825,6 +825,9 @@ yum -y install mongodb-org python-pymongo
 systemctl enable mongod.service
 systemctl start mongod.service
 
+# MongoDB takes a moment to start
+sleep 3
+
 # Secure MongoDB by adding an administrative user
 echo "use admin
 db.createUser(
