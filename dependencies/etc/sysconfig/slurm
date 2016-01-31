@@ -42,6 +42,16 @@ ulimit -n 8192
 SLURMD_OPTIONS="-M"
 
 
+########### Determine if SLURM is starting up or shutting down ##########
+slurm_running=$(pgrep "(slurmctl|slurmd)")
+if [[ -n "${slurm_running}" ]]; then
+    # If any process with the name slurmctl or slurmd was found, we will
+    # assume that SLURM is running and is now being shut down. We will
+    # not make any changes to the current GRES file.
+    echo "SLURM is shutting down - not making changes to GRES file..."
+    return
+fi
+
 
 ############## Discover "Generic Resources" and Populate gres.conf #############
 gresfile=/etc/slurm/gres.conf
@@ -61,13 +71,7 @@ if [[ -n "$(lspci | grep NVIDIA)" ]]; then
                 # information to SLURM. If not, SLURM will just see a group of
                 # generic GPU devices (without knowing their type)
                 if [[ -n "${gpu_name}" ]]; then
-                    # SLURM requires that we also inform it which CPUs are
-                    # allowed to use each GPU. By default, we allow all CPUs:
-                    cpu_list=( $(awk '/processor/ {print $3}' /proc/cpuinfo) )
-                    first_cpu=${cpu_list[0]}
-                    final_cpu=${cpu_list[${#cpu_list[@]}-1]}
-
-                    echo "Name=gpu Type=${gpu_name} File=$gpu_device CPUs=${first_cpu}\-${final_cpu}" >> $gresfile
+                    echo "Name=gpu Type=${gpu_name} File=$gpu_device" >> $gresfile
                 else
                     echo "Name=gpu File=$gpu_device" >> $gresfile
                 fi
