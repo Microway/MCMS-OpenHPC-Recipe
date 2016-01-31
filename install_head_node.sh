@@ -3,7 +3,7 @@
 ######################## Microway Cluster Management Software (MCMS) for OpenHPC
 ################################################################################
 #
-# Copyright (c) 2015 by Microway, Inc.
+# Copyright (c) 2015-2016 by Microway, Inc.
 #
 # This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
 #
@@ -175,10 +175,11 @@ systemctl set-default multi-user.target
 ################################################################################
 # Install SaltStack, which provides distribution-agnostic configuration mgmt
 ################################################################################
-yum -y install salt-minion
-#
-# On the Head Node, Salt will be configured for master-less operation
-sed -i "s/#file_client:.*/file_client: local/" /etc/salt/minion
+yum -y install salt-minion salt-master
+systemctl enable salt-master
+systemctl start salt-master
+systemctl enable salt-minion
+systemctl start salt-minion
 
 
 
