@@ -186,7 +186,9 @@ systemctl start salt-minion
 ################################################################################
 # Add the OpenHPC repository and install the baseline OpenHPC packages
 ################################################################################
-curl ${ohpc_repo} -o /etc/yum.repos.d/OpenHPC:1.0.repo
+curl ${ohpc_repo} -o /tmp/ohpc-release.x86_64.rpm
+rpm -i /tmp/ohpc-release.x86_64.rpm
+rm -f /tmp/ohpc-release.x86_64.rpm
 
 yum -y install docs-ohpc
 yum -y groupinstall ohpc-base
