@@ -1023,6 +1023,7 @@ mcms_package_selections['global']="
     bc
     byacc
     emacs
+    gdb
     git
     golang
     htop
