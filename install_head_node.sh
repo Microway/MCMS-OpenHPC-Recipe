@@ -816,7 +816,7 @@ fi
 
 
 ################################################################################
-# Install MongoDB database (required for MCMS management/monitoring tools)
+# Install MongoDB and npm (required for MCMS management/monitoring tools)
 ################################################################################
 echo "
 [mongodb-org-3.0]
@@ -825,7 +825,7 @@ baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/3.0/x86_64/
 gpgcheck=0
 enabled=1
 " > /etc/yum.repos.d/mongodb-org-3.0.repo
-yum -y install mongodb-org python-pymongo
+yum -y install mongodb-org python-pymongo npm
 systemctl enable mongod.service
 systemctl start mongod.service
 
@@ -861,6 +861,16 @@ systemctl restart mongod.service
 #
 #   mongo -u root -p --authenticationDatabase "admin"
 #
+
+
+
+################################################################################
+# Set up the MCMS user account (which manages the cluster)
+################################################################################
+mkdir -p /var/lib/mcms
+useradd --system --gid warewulf --no-create-home --home-dir /var/lib/mcms mcms
+chown mcms:warewulf /var/lib/mcms
+chmod 700 /var/lib/mcms
 
 
 
