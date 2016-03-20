@@ -33,6 +33,10 @@ vim configuration_settings.txt
 ```
 
 ### More Information
+If you would like to purchase professional support/services for an OpenHPC
+cluster, or to fund development of a new feature, please visit:
+https://www.microway.com/contact/
+
 To learn more about OpenHPC or to view the official installation recipe, visit:
 http://www.openhpc.community/
 
