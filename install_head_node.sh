@@ -861,16 +861,23 @@ systemctl restart mongod.service
 #
 #   mongo -u root -p --authenticationDatabase "admin"
 #
+#   > show collections
+#
 
 
 
 ################################################################################
-# Set up the MCMS user account (which manages the cluster)
+# Set up the MCMS user account with access to the MongoDB database
 ################################################################################
 mkdir -p /var/lib/mcms
 useradd --system --gid warewulf --no-create-home --home-dir /var/lib/mcms mcms
 chown mcms:warewulf /var/lib/mcms
 chmod 700 /var/lib/mcms
+
+cp -a ${dependencies_dir}/etc/microway /etc/
+chown -R mcms:warewulf /etc/microway
+chmod 600 /etc/microway/mcms_database.conf
+sed -i "s/mcms_database_password='ChangeMe'/mcms_database_password='${db_mgmt_password}'"
 
 
 
