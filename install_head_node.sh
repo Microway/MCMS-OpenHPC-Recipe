@@ -1075,6 +1075,8 @@ mcms_package_selections['global']="
 
     ncurses ncurses-libs ncurses-static
 
+    python-netaddr python-netifaces python-psutil
+
     ibutils
     infiniband-diags infiniband-diags-devel
     libibcm libibcm-devel
@@ -1141,8 +1143,11 @@ yum -y --installroot=${node_chroot} install              \
                ${mcms_package_selections['compute_node']}
 
 # Packages which can't be installed via yum
-pip install gnuplot-py
+pip install gnuplot-py plumbum
 chroot ${node_chroot} pip install gnuplot-py
+
+# The distro version of pymongo is too old to support newer credentials
+pip install --upgrade pymongo
 
 # Clear out the random entries from chrooting into the compute node environment
 > ${node_chroot}/root/.bash_history
