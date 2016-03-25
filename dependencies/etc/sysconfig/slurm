@@ -2,7 +2,7 @@
 ######################## Microway Cluster Management Software (MCMS) for OpenHPC
 ################################################################################
 #
-# Copyright (c) 2015 by Microway, Inc.
+# Copyright (c) 2015-2016 by Microway, Inc.
 #
 # This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
 #
@@ -62,20 +62,51 @@ if [[ -n "$(lspci | grep NVIDIA)" ]]; then
     # If GPU settings are already present, assume they've been set elsewhere,
     # or that SLURM is restarting and set them up the last time it started.
     if [[ -z "$(grep '/dev/nvidia' $gresfile 2> /dev/null)" ]]; then
-        if [[ -c /dev/nvidia0 ]]; then
-            for gpu_device in $(find /dev/ -type c -name "nvidia[0-9]*" | sort); do
-                gpu_id=${gpu_device#*nvidia}
-                gpu_name=$(nvidia-smi --format=csv,noheader --query-gpu=gpu_name --id=${gpu_id} | sed 's/ /_/g')
 
-                # If we were able to grab the name, we provide the additional
-                # information to SLURM. If not, SLURM will just see a group of
-                # generic GPU devices (without knowing their type)
-                if [[ -n "${gpu_name}" ]]; then
-                    echo "Name=gpu Type=${gpu_name} File=$gpu_device" >> $gresfile
-                else
-                    echo "Name=gpu File=$gpu_device" >> $gresfile
-                fi
-            done
+        # Test for the presence of NVIDIA GPU devices
+        if [[ -c /dev/nvidia0 ]]; then
+
+            # Determine the ordering of the GPUs as seen by NVIDIA CUDA
+            check_for_cdl=$(which nvidia-cdl)
+            if [[ -z "$check_for_cdl" ]]; then
+                echo "SLURM startup - the nvidia-cdl tool is unavailable, so unable to set GPU types"
+            else
+                # Output will look like:
+                #   GPU-14788fcd-7c65-7ec4-3002-b5b15a7xxxxx
+                #   GPU-d105b085-7239-3871-43ef-975ecacxxxxx
+                ordered_gpus=$(nvidia-cdl -a | awk '/UUID/ {print $2}')
+            fi
+
+            # If we were not able to grab the CUDA ordering, we pass a group of
+            # generic GPU devices to SLURM. SLURM won't know their types.
+            if [[ -z "$ordered_gpus" ]]; then
+                # Loop through each NVIDIA device (in PCI order) and write the settings
+                for gpu_device in $(find /dev/ -type c -name "nvidia[0-9]*" | sort); do
+                    echo "Name=gpu File=${gpu_device}" >> $gresfile
+                done
+            else
+                # SLURM requires that we also inform it which CPUs are
+                # allowed to use each GPU. By default, we allow all CPUs:
+                cpu_list=( $(awk '/processor/ {print $3}' /proc/cpuinfo) )
+                first_cpu=${cpu_list[0]}
+                final_cpu=${cpu_list[${#cpu_list[@]}-1]}
+
+                # We know the CUDA ordering and GPU UUID, but need
+                # to determine the name of each GPU device.
+                gpu_id=0
+                for gpu_device in ${ordered_gpus}; do
+                    gpu_name=$(nvidia-smi --format=csv,noheader --query-gpu=gpu_name --id=${gpu_device} | sed 's/ /-/g')
+
+                    # We will supply a generic name if we couldn't get a name
+                    if [[ -z "$gpu_name" ]]; then
+                        gpu_name="gpu"
+                    fi
+
+                    echo "Name=gpu Type=${gpu_name} File=/dev/nvidia${gpu_id} CPUs=${first_cpu}-${final_cpu}" >> $gresfile
+
+                    gpu_id=$(( $gpu_id + 1 ))
+                done
+            fi
         else
             echo "SLURM startup - unable to add GPUs to SLURM $gresfile file - lspci reports GPUs, but they are not in /dev !"
         fi
