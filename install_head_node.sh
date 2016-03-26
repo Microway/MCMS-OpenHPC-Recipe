@@ -934,6 +934,13 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
     yum -y --installroot ${node_chroot} install gpu-deployment-kit
     pip install nvidia-ml-py
 
+    # The nvidia-cdl tool is needed to determine CUDA device ordering
+    curl -o nvidia-cdl.rpm https://github.com/Microway/nvidia-cdl/releases/download/v1.1.1/nvidia-cdl-1.1.1-1.x86_64.rpm
+    rpm -i nvidia-cdl.rpm
+    mv nvidia-cdl.rpm ${node_chroot}/
+    chroot ${node_chroot} rpm -i /nvidia-cdl.rpm
+    rm -f ${node_chroot}/nvidia-cdl.rpm
+
     # Install scripts/configuration to bring up the GPUs during boot
     cp -a ${dependencies_dir}/etc/init.d/nvidia /etc/init.d/nvidia
     cp -a ${dependencies_dir}/etc/init.d/nvidia ${node_chroot}/etc/init.d/nvidia
