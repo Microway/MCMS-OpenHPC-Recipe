@@ -268,6 +268,31 @@ echo "
 
 " >> /etc/exports
 exportfs -a
+
+# Enable the NFS services
+systemctl enable rpcbind.service
+systemctl enable nfs-server.service
+
+# The following fixes may be needed:
+#
+# echo "
+# [Install]
+# WantedBy=multi-user.target
+#
+# " >> /usr/lib/systemd/system/nfs-idmap.service
+# echo "
+#
+# [Install]
+# WantedBy=nfs.target
+#
+# " >> /usr/lib/systemd/system/nfs-lock.service
+
+systemctl enable nfs-lock.service
+systemctl enable nfs-idmap.service
+systemctl start rpcbind.service
+systemctl start nfs-server.service
+systemctl start nfs-lock.service
+systemctl start nfs-idmap.service
 systemctl restart nfs.service
 
 
