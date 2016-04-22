@@ -1,0 +1,13 @@
+# /etc/genders
+#
+# Defines cluster components (Head Node, Compute Nodes, etc.)
+#
+# Used by genders library for PDSH, PDCP and other utilities
+#
+#
+# Recommended types to define in every cluster:
+#   head (sms)    (the Head/Master/System Management Server)
+#   login         (the Login Nodes of the cluster)
+#   compute       (the Compute Nodes of the cluster)
+#
+##############################################################################

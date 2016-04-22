@@ -2,7 +2,7 @@
 ######################## Microway Cluster Management Software (MCMS) for OpenHPC
 ################################################################################
 #
-# Copyright (c) 2015 by Microway, Inc.
+# Copyright (c) 2015-2016 by Microway, Inc.
 #
 # This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
 #
@@ -208,7 +208,7 @@ compute_node_name_prefix="node"
 compute_regex="${compute_node_name_prefix}*"
 
 # OpenHPC repo location
-ohpc_repo=https://github.com/openhpc/ohpc/releases/download/v1.0.1.GA/ohpc-release-1.0-1.x86_64.rpm
+ohpc_repo=https://github.com/openhpc/ohpc/releases/download/v1.1.GA/ohpc-release-centos7.2-1.1-1.x86_64.rpm
 
 # Local ntp server for time synchronization - this is typically only necessary
 # if the cluster doesn't have access to NTP servers from the Internet.

@@ -186,7 +186,7 @@ systemctl start salt-minion
 ################################################################################
 # Add the OpenHPC repository and install the baseline OpenHPC packages
 ################################################################################
-curl ${ohpc_repo} -o /tmp/ohpc-release.x86_64.rpm
+curl -L -o /tmp/ohpc-release.x86_64.rpm ${ohpc_repo}
 rpm -i /tmp/ohpc-release.x86_64.rpm
 rm -f /tmp/ohpc-release.x86_64.rpm
 
@@ -197,6 +197,38 @@ yum -y install warewulf-ipmi-ohpc
 
 # Create a group for HPC administrators
 groupadd hpc-admin
+
+
+
+################################################################################
+# Install Genders (which associates roles with each system)
+################################################################################
+yum -y install genders-ohpc
+install -p -o root -g root -m 644 ${dependencies_dir}/etc/genders /etc/genders
+
+# Set up the default roles for the Head/SMS and Compute Node systems
+echo -e "${sms_name}\thead,sms,login" >> /etc/genders
+
+for ((i=0; i<$compute_node_count; i++)) ; do
+    c_name=${compute_node_name_prefix}$(( ${i} + 1 ))
+    echo -e "${c_name}\tcompute,bmc=${c_bmc[$i]}"
+done >> /etc/genders
+
+
+
+################################################################################
+# Install ClusterShell (Python-based library for parallel command execution)
+################################################################################
+yum -y install clustershell-ohpc
+
+# Set up node definitions
+mv /etc/clustershell/groups.d/{local.cfg,local.cfg.orig}
+echo "
+adm: ${sms_name}
+compute: ${compute_node_name_prefix}[1-${compute_node_count}]
+all: @adm,@compute
+
+" > /etc/clustershell/groups.d/local.cfg
 
 
 
@@ -317,11 +349,12 @@ echo "GRANT ALL ON warewulf.* TO 'warewulf'@'localhost' IDENTIFIED BY '${db_mgmt
 ################################################################################
 
 # Initialize the compute node chroot installation
-export node_chroot=/opt/ohpc/admin/images/centos-7
+export node_chroot_name=centos-7
+export node_chroot=/opt/ohpc/admin/images/${node_chroot_name}
 if [[ ! -z "${BOS_MIRROR}" ]]; then
     sed -i -r "s#^YUM_MIRROR=(\S+)#YUM_MIRROR=${BOS_MIRROR}#" /usr/libexec/warewulf/wwmkchroot/centos-7.tmpl
 fi
-wwmkchroot centos-7 ${node_chroot}
+wwmkchroot ${node_chroot_name} ${node_chroot}
 
 
 # Distribute root's SSH keys across the cluster
@@ -693,6 +726,7 @@ wwbootstrap `uname -r`
 wwsh file import /etc/passwd
 wwsh file import /etc/group
 wwsh file import /etc/shadow
+wwsh file import /etc/genders
 wwsh file import /etc/slurm/slurm.conf
 wwsh file import /etc/munge/munge.key
 
@@ -721,11 +755,22 @@ for ((i=0; i<$compute_node_count; i++)) ; do
                                --password="${bmc_password}"
 done
 
+################################################################################
+# If you need to scan for the new nodes (you don't know their MAC addresses)
+################################################################################
+#
+# wwnodescan --netdev=${eth_provision} --ipaddr=${c_ip[0]}              \
+#            --netmask=${internal_netmask} --vnfs=${node_chroot_name}   \
+#            --bootstrap=`uname -r`                                     \
+#            ${compute_node_name_prefix}0-${compute_node_name_prefix}3
+# wwsh pxe update
+#
+
 # Configure all compute nodes to boot the same Linux image
 wwsh -y provision set "${compute_regex}" \
-     --vnfs=centos-7                     \
+     --vnfs=${node_chroot_name}          \
      --bootstrap=`uname -r`              \
-     --files=dynamic_hosts,passwd,group,shadow,slurm.conf,munge.key
+     --files=dynamic_hosts,passwd,group,shadow,genders,slurm.conf,munge.key
 
 # Restart ganglia services to pick up hostfile changes
 systemctl restart gmond.service
@@ -759,8 +804,12 @@ fi
 #
 # export IPMI_PASSWORD="xxxxxx"
 # for ((i=0; i<${compute_node_count}; i++)) ; do
-#     ipmitool -E -I lanplus -H ${c_bmc[$i]} -U bmc_username chassis power reset
+#     ipmitool -E -I lanplus -H ${c_bmc[$i]} -U root chassis power reset
+#
+#     # If you want to set nodes to PXE boot by default:
+#     ipmitool -E -I lanplus -H ${c_bmc[$i]} -U root chassis bootdev pxe options=persistent
 # done
+#
 #
 
 
@@ -771,6 +820,7 @@ fi
 yum -y groupinstall ohpc-autotools
 yum -y install valgrind-ohpc
 yum -y install EasyBuild-ohpc
+yum -y install spack-ohpc
 yum -y install R_base-ohpc
 
 
@@ -786,10 +836,7 @@ yum -y install gnu-compilers-ohpc intel-compilers-devel-ohpc
 # Install Performance Tools
 ################################################################################
 yum -y install papi-ohpc
-yum -y install intel-itac-ohpc
-yum -y install intel-vtune-ohpc
-yum -y install intel-advisor-ohpc
-yum -y install intel-inspector-ohpc
+yum -y install intel-itac-ohpc intel-vtune-ohpc intel-advisor-ohpc intel-inspector-ohpc
 yum -y groupinstall ohpc-mpiP
 yum -y groupinstall ohpc-tau
 
