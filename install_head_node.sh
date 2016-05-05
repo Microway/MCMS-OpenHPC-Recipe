@@ -578,10 +578,10 @@ systemctl start slurm.service
 
 # Set up SLURM accounting information. You must define clusters before you add
 # accounts, and you must add accounts before you can add users.
-sacctmgr add cluster ${cluster_acct_hierarchy['cluster_name']}
-sacctmgr add account ${cluster_acct_hierarchy['default_organization']} \
+sacctmgr --immediate add cluster ${cluster_acct_hierarchy['cluster_name']}
+sacctmgr --immediate add account ${cluster_acct_hierarchy['default_organization']} \
     description="${cluster_acct_hierarchy['default_organization_description']}"
-sacctmgr add account ${cluster_acct_hierarchy['default_account']} \
+sacctmgr --immediate add account ${cluster_acct_hierarchy['default_account']} \
     description="${cluster_acct_hierarchy['default_account_description']}" \
     organization=${cluster_acct_hierarchy['default_organization']}
 
@@ -902,7 +902,7 @@ systemctl enable mongod.service
 systemctl start mongod.service
 
 # MongoDB takes a moment to start
-sleep 3
+sleep 15
 
 # Secure MongoDB by adding an administrative user
 echo "use admin
@@ -949,7 +949,7 @@ chmod 700 /var/lib/mcms
 cp -a ${dependencies_dir}/etc/microway /etc/
 chown -R mcms:warewulf /etc/microway
 chmod 600 /etc/microway/mcms_database.conf
-sed -i "s/mcms_database_password='ChangeMe'/mcms_database_password='${db_mgmt_password}'"
+sed -i "s/mcms_database_password='ChangeMe'/mcms_database_password='${db_mgmt_password}'/"
 
 
 
@@ -969,7 +969,7 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
     # Determine the architecture of the system (e.g., x86_64)
     machine_type=$(uname --processor)
 
-    curl -o cuda-repo-rhel7-7.5-18.x86_64.rpm http://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-repo-rhel7-7.5-18.x86_64.rpm
+    curl -L -o cuda-repo-rhel7-7.5-18.x86_64.rpm http://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-repo-rhel7-7.5-18.x86_64.rpm
 
     # Install the CUDA repo on the Head Node and Compute Node image
     rpm -i cuda-repo-rhel7-7.5-18.x86_64.rpm
@@ -992,7 +992,7 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
         echo "Building CUDA $version samples..."
         cp -a /usr/local/cuda-${version}/samples /usr/local/cuda-${version}/tmp-build
         cd /usr/local/cuda-${version}/tmp-build
-        make -j8
+        make -j2
         mv bin/${machine_type}/linux/release ../samples-bin
         cd -
         rm -Rf /usr/local/cuda-${version}/tmp-build
@@ -1007,7 +1007,7 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
     pip install nvidia-ml-py
 
     # The nvidia-cdl tool is needed to determine CUDA device ordering
-    curl -o nvidia-cdl.rpm https://github.com/Microway/nvidia-cdl/releases/download/v1.1.1/nvidia-cdl-1.1.1-1.x86_64.rpm
+    curl -L -o nvidia-cdl.rpm https://github.com/Microway/nvidia-cdl/releases/download/v1.1.1/nvidia-cdl-1.1.1-1.x86_64.rpm
     rpm -i nvidia-cdl.rpm
     mv nvidia-cdl.rpm ${node_chroot}/
     chroot ${node_chroot} rpm -i /nvidia-cdl.rpm
@@ -1044,7 +1044,7 @@ fi
 ################################################################################
 if [[ "${enable_phi_coprocessor}" == "true" ]]; then
     intel_xeonphi_mpss="http://registrationcenter.intel.com/irc_nas/8202/mpss-3.6-linux.tar"
-    curl -o mpss-3.6-linux.tar ${intel_xeonphi_mpss}
+    curl -L -o mpss-3.6-linux.tar ${intel_xeonphi_mpss}
     tar xvf mpss-3.6-linux.tar
     cd mpss-3.6/
     yum -y install kernel-headers kernel-devel
@@ -1125,6 +1125,7 @@ mcms_package_selections['global']="
     golang
     htop
     java-1.6.0-openjdk-devel java-1.7.0-openjdk-devel java-1.8.0-openjdk-devel
+    libtool
     man
     mc
     meld
