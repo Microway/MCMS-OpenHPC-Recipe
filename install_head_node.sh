@@ -459,6 +459,11 @@ echo "
 
 " >> /etc/hosts
 
+# Ensure that the Head Node's name is in /etc/hosts
+egrep "^[^#]+$(hostname -s)" /etc/hosts
+if [[ $? -ne 0 ]]; then
+    sed "s/^\(127.0.0.1.*\)/\1 $(hostname -s)/" /etc/hosts
+fi
 
 
 ################################################################################
