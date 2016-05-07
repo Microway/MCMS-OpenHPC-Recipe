@@ -578,8 +578,6 @@ systemctl enable munge.service
 systemctl start munge.service
 systemctl enable slurmdbd.service
 systemctl start slurmdbd.service
-systemctl enable slurm.service
-systemctl start slurm.service
 
 # Set up SLURM accounting information. You must define clusters before you add
 # accounts, and you must add accounts before you can add users.
@@ -589,6 +587,9 @@ sacctmgr --immediate add account ${cluster_acct_hierarchy['default_organization'
 sacctmgr --immediate add account ${cluster_acct_hierarchy['default_account']} \
     description="${cluster_acct_hierarchy['default_account_description']}" \
     organization=${cluster_acct_hierarchy['default_organization']}
+
+systemctl enable slurm.service
+systemctl start slurm.service
 
 
 
