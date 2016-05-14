@@ -173,17 +173,6 @@ systemctl set-default multi-user.target
 
 
 ################################################################################
-# Install SaltStack, which provides distribution-agnostic configuration mgmt
-################################################################################
-yum -y install salt-minion salt-master
-systemctl enable salt-master
-systemctl start salt-master
-systemctl enable salt-minion
-systemctl start salt-minion
-
-
-
-################################################################################
 # Add the OpenHPC repository and install the baseline OpenHPC packages
 ################################################################################
 curl -L -o /tmp/ohpc-release.x86_64.rpm ${ohpc_repo}
@@ -507,11 +496,27 @@ if [[ $? -ne 0 ]]; then
     echo "
 
 # Head Node of the cluster
-${sms_ip}        $(hostname -s)
+${sms_ip}        $(hostname -s) salt
 
 
 " >> /etc/hosts
 fi
+
+
+
+################################################################################
+# Install SaltStack, which provides distribution-agnostic configuration mgmt
+################################################################################
+yum -y install salt-minion salt-master
+yum -y --installroot=${node_chroot} install salt-minion
+systemctl enable salt-master
+systemctl start salt-master
+systemctl enable salt-minion
+systemctl start salt-minion
+chroot ${node_chroot} systemctl enable salt-minion
+# Note that the minion keys will need to be accepted once the cluster is up:
+#   salt-key --accept-all
+
 
 
 ################################################################################
