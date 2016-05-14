@@ -266,6 +266,35 @@ fi
 
 
 ################################################################################
+# Configure the firewall
+################################################################################
+# Ensure the firewall is active (some VM images don't include it)
+yum -y install firewalld
+systemctl enable firewalld.service
+systemctl start firewalld.service
+
+# Allow all traffic on the internal cluster network interface
+firewall-cmd --permanent --zone=trusted --change-interface=${sms_eth_internal}
+
+# Perform NAT for traffic going out the public interface
+firewall-cmd --permanent --zone=public --add-masquerade
+sysctl -w net.ipv4.ip_forward=1
+echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.d/ip_forward.conf
+
+# Be restrictive on the external network interface
+firewall-cmd --permanent --zone=public --change-interface=${sms_eth_external}
+
+# If there is an InfiniBand fabric, trust its traffic
+if [[ "${enable_infiniband}" == "true" ]]; then
+    firewall-cmd --permanent --zone=trusted --change-interface=ib0
+fi
+
+# Reload rules for them to take effect
+firewall-cmd --reload
+
+
+
+################################################################################
 # Configure and start the Warewulf services
 ################################################################################
 
@@ -429,6 +458,7 @@ echo "
 # NFS mounts from the Head Node
 ${sms_ip}:/home         /home         nfs nfsvers=3,rsize=1024,wsize=1024,cto 0 0
 ${sms_ip}:/opt/ohpc/pub /opt/ohpc/pub nfs nfsvers=3 0 0
+${sms_ip}:/opt/ohpc/admin/images/${node_chroot} /vnfs nfs nfsvers=3 0 0
 " >> ${node_chroot}/etc/fstab
 
 
@@ -613,6 +643,17 @@ y
 ################################################################################
 update-pciids
 chroot ${node_chroot} update-pciids
+
+
+
+################################################################################
+# Syncronize the built-in users between Head and Compute Nodes
+#
+# If not done now, the users created by the following packages will have
+# different UIDs and GIDs on the Compute Nodes than on the Head Node.
+################################################################################
+cp -af /etc/passwd ${node_chroot}/etc/
+cp -af /etc/group ${node_chroot}/etc/
 
 
 
@@ -1206,6 +1247,7 @@ mcms_package_selections['development']="
     python-devel
     python-pip
     readline-devel
+    rpm-build
     SDL SDL-devel
     snappy-devel
     sqlite-devel
@@ -1237,6 +1279,35 @@ pip install --upgrade pymongo
 
 # Clear out the random entries from chrooting into the compute node environment
 > ${node_chroot}/root/.bash_history
+
+echo "
+# Having BASH_ENV set makes Warewulf management scripts break.
+unset BASH_ENV
+
+" >> /root/.bashrc
+
+
+################################################################################
+# Complete the configuration of the Compute Node VNFS system
+################################################################################
+# Leave the node's logs directory intact (many tools die if this is missing)
+sed -i 's|exclude += /var/log/\*|# exclude += /var/log/*  # nodes need to log|' /etc/warewulf/vnfs.conf
+
+# Enable a VNFS directory (for hybridizing images)
+sed -i 's|# hybridpath = /hybrid.*|hybridpath = /vnfs|' /etc/warewulf/vnfs/${node_chroot}.conf
+
+# Hybridize some paths which commonly bloat the images
+echo "
+
+hybridize += /usr/local
+hybridize += /opt/ohpc
+hybridize += /usr/lib/golang
+hybridize += /usr/lib/jvm
+hybridize += /usr/lib64/nvidia
+hybridize += /usr/lib64/firefox
+
+" >> /etc/warewulf/vnfs/${node_chroot}.conf
+
 
 # Re-assemble compute node VNFS with all the software changes
 wwvnfs -y --chroot ${node_chroot}
