@@ -266,6 +266,19 @@ fi
 
 
 ################################################################################
+# Configure the Head Node to be able to talk to Compute Node BMCs
+# This assumes that the Compute Node BMCs are using their shared network port.
+################################################################################
+network_alias_file="/etc/sysconfig/network-scripts/ifcfg-${sms_eth_internal}:0"
+cp /etc/sysconfig/network-scripts/ifcfg-${sms_eth_internal} ${network_alias_file}
+sed -i "s/NM_CONTROLLED.*/NM_CONTROLLED=no/" ${network_alias_file}
+sed -i "s/DEVICE.*/DEVICE=${sms_eth_internal}:0/" ${network_alias_file}
+sed -i "s/${internal_subnet_prefix}/${bmc_subnet_prefix}/" ${network_alias_file}
+sed -i "s/NETMASK.*/NETMASK=${bmc_netmask}/" ${network_alias_file}
+
+
+
+################################################################################
 # Configure the firewall
 ################################################################################
 # Ensure the firewall is active (some VM images don't include it)
