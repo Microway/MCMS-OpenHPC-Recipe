@@ -486,13 +486,18 @@ echo "
 #
 ################################################################################
 
-
 " >> /etc/hosts
 
 # Ensure that the Head Node's name is in /etc/hosts
 egrep "^[^#]+$(hostname -s)" /etc/hosts
 if [[ $? -ne 0 ]]; then
-    sed -i "s/^\(127.0.0.1.*\)/\1 $(hostname -s)/" /etc/hosts
+    echo "
+
+# Head Node of the cluster
+${sms_ip}        $(hostname -s)
+
+
+" >> /etc/hosts
 fi
 
 
