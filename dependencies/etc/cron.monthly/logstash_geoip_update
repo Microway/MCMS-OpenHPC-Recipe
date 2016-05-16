@@ -1,0 +1,66 @@
+#!/bin/bash
+################################################################################
+######################## Microway Cluster Management Software (MCMS) for OpenHPC
+################################################################################
+#
+# Copyright (c) 2015-2016 by Microway, Inc.
+#
+# This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
+#
+#    MCMS for OpenHPC is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    MCMS for OpenHPC is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with MCMS.  If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
+
+
+################################################################################
+#
+# Update the GeoLiteCity database which is used for GeoIP lookups in Logstash
+#
+################################################################################
+
+db_url="http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
+
+tmp_file="/etc/logstash/GeoLiteCity.dat.tmp"
+db_file="/etc/logstash/GeoLiteCity.dat"
+
+
+# Download the new database file with some fairly lenient settings (to survive
+# interruptions and to minimize network load).
+wget_options="--quiet --tries=20 --waitretry=100 --retry-connrefused --limit-rate=50k"
+
+
+wget_path=$(which wget)
+if [[ "$?" -gt "0" ]]; then
+    echo "Unable to locate wget utility"
+    exit 1
+fi
+
+
+# Sleep a random amount (up to 8 hours) to prevent multiple
+# clusters from DDOSing the GeoIP database site.
+sleep $(( $RANDOM % (60 * 60 * 8) ))
+
+
+$wget_path $wget_options --output-document=- $db_url | gunzip > $tmp_file
+
+
+# Assuming the update completed successfully, move the new file into place
+RETVAL=$?
+if [[ "$RETVAL" -eq "0" ]]; then
+    mv --force $tmp_file $db_file
+else
+    echo "Unable to update GeoLiteCity IP geolocation database for Logstash"
+    exit $RETVAL
+fi

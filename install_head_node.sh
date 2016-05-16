@@ -705,6 +705,97 @@ systemctl try-restart httpd.service
 
 
 ################################################################################
+# Install Elasticsearch for analytics on log/event data
+################################################################################
+rpm --import https://packages.elastic.co/GPG-KEY-elasticsearch
+echo "[elasticsearch-2.x]
+name=Elasticsearch repository for 2.x packages
+baseurl=https://packages.elastic.co/elasticsearch/2.x/centos
+gpgcheck=1
+gpgkey=https://packages.elastic.co/GPG-KEY-elasticsearch
+enabled=1" > /etc/yum.repos.d/elasticsearch.repo
+
+yum -y install elasticsearch
+# For security, limit connections to localhost
+sed -i 's/# network.host.*/network.host: localhost/' /etc/elasticsearch/elasticsearch.yml
+systemctl enable elasticsearch.service
+systemctl start elasticsearch.service
+
+
+
+################################################################################
+# Install Kibana web interface to Elasticsearch
+################################################################################
+echo "[kibana-4.5]
+name=Kibana repository for 4.5.x packages
+baseurl=http://packages.elastic.co/kibana/4.5/centos
+gpgcheck=1
+gpgkey=http://packages.elastic.co/GPG-KEY-elasticsearch
+enabled=1" > /etc/yum.repos.d/kibana.repo
+
+yum -y install kibana
+systemctl enable kibana.service
+systemctl start kibana.service
+
+
+
+################################################################################
+# Install LogStash for aggregation and parsing of cluster syslogs
+################################################################################
+echo "[logstash-2.3]
+name=Logstash repository for 2.3.x packages
+baseurl=https://packages.elastic.co/logstash/2.3/centos
+gpgcheck=1
+gpgkey=https://packages.elastic.co/GPG-KEY-elasticsearch
+enabled=1" > /etc/yum.repos.d/logstash.repo
+
+yum -y install logstash
+
+# Security certs are needed when transferring logs between systems
+perl -0777 -pe "s/\[ v3_ca \]\n/[ v3_ca ]\n\nsubjectAltName = IP:${sms_ip}\n/" /etc/pki/tls/openssl.cnf
+openssl req -config /etc/pki/tls/openssl.cnf                    \
+        -x509 -days 3650 -batch -nodes -newkey rsa:2048         \
+        -keyout /etc/pki/tls/private/logstash-forwarder.key     \
+        -out /etc/pki/tls/certs/logstash-forwarder.crt
+cp -a /etc/pki/tls/certs/logstash-forwarder.crt ${node_chroot}/etc/pki/tls/certs/
+
+# Put the LogStash input and parsing configurations into place
+cp -a ${dependencies_dir}/etc/logstash/conf.d/* /etc/logstash/conf.d/
+
+systemctl enable logstash.service
+systemctl start logstash.service
+
+
+
+################################################################################
+# Install FileBeat on Head Node and Compute Node (forwards syslogs to LogStash)
+################################################################################
+echo "[beats]
+name=Elastic Beats Repository
+baseurl=https://packages.elastic.co/beats/yum/el/\$basearch
+enabled=1
+gpgkey=https://packages.elastic.co/GPG-KEY-elasticsearch
+gpgcheck=1" > /etc/yum.repos.d/elastic-beats.repo
+cp -a /etc/yum.repos.d/elastic-beats.repo ${node_chroot}/etc/yum.repos.d/
+
+yum -y install filebeat
+yum -y --installroot=${node_chroot} install filebeat
+
+# Put the FileBeat configuration into place
+mv /etc/filebeat/filebeat.yml{,.orig}
+mv ${node_chroot}/etc/filebeat/filebeat.yml{,.orig}
+cp -a ${dependencies_dir}/etc/filebeat/filebeat.yml /etc/filebeat/
+cp -a ${dependencies_dir}/etc/filebeat/filebeat.yml ${node_chroot}/etc/filebeat/
+sed -i "s/{sms_ip}/${sms_ip}/" /etc/filebeat/filebeat.yml
+sed -i "s/{sms_ip}/${sms_ip}/" ${node_chroot}/etc/filebeat/filebeat.yml
+
+systemctl enable filebeat.service
+systemctl start filebeat.service
+chroot ${node_chroot} systemctl enable filebeat.service
+
+
+
+################################################################################
 # Install Intel Cluster Checker on the Head Node and Compute Nodes
 ################################################################################
 yum -y install intel-clck-ohpc
