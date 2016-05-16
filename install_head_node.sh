@@ -763,7 +763,9 @@ cp -a /etc/pki/tls/certs/logstash-forwarder.crt ${node_chroot}/etc/pki/tls/certs
 cp -a ${dependencies_dir}/etc/logstash/conf.d/* /etc/logstash/conf.d/
 
 # Put the IP-to-geolocation database into place
-wget --tries=20 --waitretry=10 --retry-connrefused --output-document=- http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz | gunzip > /etc/logstash/GeoLiteCity.dat
+wget --tries=20 --waitretry=10 --retry-connrefused --output-document=-        \
+     http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz |  \
+     gunzip > /etc/logstash/GeoLiteCity.dat
 
 systemctl enable logstash.service
 systemctl start logstash.service
