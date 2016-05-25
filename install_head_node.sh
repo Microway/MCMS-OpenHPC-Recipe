@@ -885,7 +885,7 @@ fi
 
 
 # Update the bootstrap image for the current Linux kernel version
-wwbootstrap `uname -r`
+echo yes | wwbootstrap `uname -r`
 
 
 # Link the files which will be automatically synced to the nodes periodically
@@ -1428,6 +1428,9 @@ hybridize += /usr/lib64/firefox
 
 " >> /etc/warewulf/vnfs/${node_chroot}.conf
 
+
+# Rebuild the Linux bootstrap (with the kernel and kernel modules)
+echo yes | wwbootstrap `uname -r`
 
 # Re-assemble compute node VNFS with all the software changes
 wwvnfs -y --chroot ${node_chroot}
