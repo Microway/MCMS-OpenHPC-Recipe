@@ -459,7 +459,7 @@ echo "
 
 # NFS mounts from the Head Node
 ${sms_ip}:/home         /home         nfs nfsvers=3,rsize=1024,wsize=1024,cto 0 0
-${sms_ip}:/opt/ohpc/pub /opt/ohpc/pub nfs nfsvers=3 0 0
+${sms_ip}:/opt/ohpc     /opt/ohpc     nfs nfsvers=3,ro 0 0
 ${sms_ip}:/opt/ohpc/admin/images/${node_chroot} /vnfs nfs nfsvers=3 0 0
 " >> ${node_chroot}/etc/fstab
 
@@ -1419,8 +1419,11 @@ sed -i 's|# hybridpath = /hybrid.*|hybridpath = /vnfs|' /etc/warewulf/vnfs/${nod
 # Hybridize some paths which commonly bloat the images
 echo "
 
+# We will be mounting this from the Head Node via NFS
+exclude += /opt/ohpc
+
+# These paths will be made available to nodes via NFS
 hybridize += /usr/local
-hybridize += /opt/ohpc
 hybridize += /usr/lib/golang
 hybridize += /usr/lib/jvm
 hybridize += /usr/lib64/nvidia
