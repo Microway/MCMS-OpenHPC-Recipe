@@ -1414,7 +1414,7 @@ unset BASH_ENV
 sed -i 's|exclude += /var/log/\*|# exclude += /var/log/*  # nodes need to log|' /etc/warewulf/vnfs.conf
 
 # Enable a VNFS directory (for hybridizing images)
-sed -i 's|# hybridpath = /hybrid.*|hybridpath = /vnfs|' /etc/warewulf/vnfs/${node_chroot}.conf
+sed -i 's|# hybridpath = /hybrid.*|hybridpath = /vnfs|' /etc/warewulf/vnfs/${node_chroot_name}.conf
 
 # Hybridize some paths which commonly bloat the images
 echo "
@@ -1429,7 +1429,7 @@ hybridize += /usr/lib/jvm
 hybridize += /usr/lib64/nvidia
 hybridize += /usr/lib64/firefox
 
-" >> /etc/warewulf/vnfs/${node_chroot}.conf
+" >> /etc/warewulf/vnfs/${node_chroot_name}.conf
 
 
 # Rebuild the Linux bootstrap (with the kernel and kernel modules)
