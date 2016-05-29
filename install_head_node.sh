@@ -1181,12 +1181,15 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
 
     # Install scripts/configuration to bring up the GPUs during boot
     cp -a ${dependencies_dir}/etc/init.d/nvidia /etc/init.d/nvidia
+    cp -a ${dependencies_dir}/usr/lib/systemd/system/nvidia-gpu.service  \
+                             /usr/lib/systemd/system/nvidia-gpu.service
     cp -a ${dependencies_dir}/etc/init.d/nvidia ${node_chroot}/etc/init.d/nvidia
+    cp -a ${dependencies_dir}/usr/lib/systemd/system/nvidia-gpu.service  \
+               ${node_chroot}/usr/lib/systemd/system/nvidia-gpu.service
     cp -a ${dependencies_dir}/etc/sysconfig/nvidia /etc/sysconfig/nvidia
     cp -a ${dependencies_dir}/etc/sysconfig/nvidia ${node_chroot}/etc/sysconfig/nvidia
     # By default, we'll assume we're not bringing up GPUs in the Head Node
-    chroot ${node_chroot} systemctl enable nvidia.service
-    chroot ${node_chroot} systemctl start nvidia.service
+    chroot ${node_chroot} systemctl enable nvidia-gpu.service
 
     # Put the GPU health check settings in place
     cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf /etc/

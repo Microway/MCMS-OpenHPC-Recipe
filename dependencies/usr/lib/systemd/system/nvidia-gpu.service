@@ -1,0 +1,13 @@
+[Unit]
+Description=NVIDIA GPU Initialization
+After=remote-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/init.d/nvidia start
+ExecStop=/etc/init.d/nvidia stop
+
+[Install]
+WantedBy=multi-user.target
+
