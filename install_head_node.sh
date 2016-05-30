@@ -176,7 +176,7 @@ systemctl set-default multi-user.target
 # Add the OpenHPC repository and install the baseline OpenHPC packages
 ################################################################################
 curl -L -o /tmp/ohpc-release.x86_64.rpm ${ohpc_repo}
-rpm -i /tmp/ohpc-release.x86_64.rpm
+yum -y install /tmp/ohpc-release.x86_64.rpm
 rm -f /tmp/ohpc-release.x86_64.rpm
 
 yum -y install docs-ohpc
@@ -708,7 +708,7 @@ systemctl try-restart httpd.service
 # Install InfluxDB for metric storage
 ################################################################################
 curl -L -o influxdb.rpm https://dl.influxdata.com/influxdb/releases/influxdb-0.12.2-1.x86_64.rpm
-rpm -ivh influxdb.rpm
+yum -y install influxdb.rpm
 rm -f influxdb.rpm
 
 # Turn on Influx's listener for Graphite/Carbon data
@@ -1186,10 +1186,9 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
     curl -L -o cuda-repo-rhel7-7.5-18.x86_64.rpm http://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-repo-rhel7-7.5-18.x86_64.rpm
 
     # Install the CUDA repo on the Head Node and Compute Node image
-    rpm -i cuda-repo-rhel7-7.5-18.x86_64.rpm
-    mv cuda-repo-rhel7-7.5-18.x86_64.rpm ${node_chroot}/
-    chroot ${node_chroot} rpm -i /cuda-repo-rhel7-7.5-18.x86_64.rpm
-    rm -f ${node_chroot}/cuda-repo-rhel7-7.5-18.x86_64.rpm
+    yum -y install cuda-repo-rhel7-7.5-18.x86_64.rpm
+    yum -y --installroot ${node_chroot} install cuda-repo-rhel7-7.5-18.x86_64.rpm
+    rm -f cuda-repo-rhel7-7.5-18.x86_64.rpm
 
     # Run the installer on the Head Node and Compute Node image
     yum --disablerepo="*" --enablerepo="cuda" list available
@@ -1222,10 +1221,9 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
 
     # The nvidia-cdl tool is needed to determine CUDA device ordering
     curl -L -o nvidia-cdl.rpm https://github.com/Microway/nvidia-cdl/releases/download/v1.1.1/nvidia-cdl-1.1.1-1.x86_64.rpm
-    rpm -i nvidia-cdl.rpm
-    mv nvidia-cdl.rpm ${node_chroot}/
-    chroot ${node_chroot} rpm -i /nvidia-cdl.rpm
-    rm -f ${node_chroot}/nvidia-cdl.rpm
+    yum -y install nvidia-cdl.rpm
+    yum -y --installroot ${node_chroot} install nvidia-cdl.rpm
+    rm -f nvidia-cdl.rpm
 
     # Install scripts/configuration to bring up the GPUs during boot
     cp -a ${dependencies_dir}/etc/init.d/nvidia /etc/init.d/nvidia
@@ -1269,7 +1267,7 @@ if [[ "${enable_phi_coprocessor}" == "true" ]]; then
     rpmbuild --rebuild mpss-modules*.src.rpm
     cd ../
     mv -v ~/rpmbuild/RPMS/x86_64/mpss-modules*$(uname -r)*.rpm modules/
-    yum install install modules/*.rpm
+    yum install modules/*.rpm
     cd ../
     modprobe mic
 
