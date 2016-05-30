@@ -705,6 +705,54 @@ systemctl try-restart httpd.service
 
 
 ################################################################################
+# Install InfluxDB for metric storage
+################################################################################
+curl -L -o influxdb.rpm https://dl.influxdata.com/influxdb/releases/influxdb-0.12.2-1.x86_64.rpm
+rpm -ivh influxdb.rpm
+rm -f influxdb.rpm
+
+# Turn on Influx's listener for Graphite/Carbon data
+perl -0777 -i -pe 's/\[\[graphite\]\]\n  enabled = false/[[graphite]]\n  enabled = true/' /etc/influxdb/influxdb.conf
+
+systemctl enable influxdb.service
+systemctl start influxdb.service
+
+
+
+################################################################################
+# Install Performance Co-Pilot (PCP) for metric collection
+################################################################################
+yum -y install avahi pcp pcp-doc pcp-gui pcp-manager
+systemctl enable pmcd.service
+systemctl start pmcd.service
+systemctl enable pmlogger.service
+systemctl start pmlogger.service
+
+# Configure PCP to monitor the Head Node
+echo "${sms_name}" > /etc/pcp/pmmgr/target-host
+
+# Configure PCP to discover all other systems/nodes on the internal network
+internal_subnet=$(ip route | awk "/${sms_eth_internal}/ {print $1}")
+echo "
+avahi,timeout=2.5
+probe=${internal_subnet}
+" > /etc/pcp/pmmgr/target-discovery
+
+systemctl enable pmmgr.service
+systemctl start pmmgr.service
+
+yum -y --installroot=${node_chroot} install pcp
+chroot ${node_chroot} systemctl enable pmcd.service
+chroot ${node_chroot} systemctl enable pmlogger.service
+
+# Provide a web interface for the data
+yum -y install pcp-webjs pcp-webapi
+systemctl enable pmwebd.service
+systemctl start pmwebd.service
+
+
+
+################################################################################
 # Install Elasticsearch for analytics on log/event data
 ################################################################################
 rpm --import https://packages.elastic.co/GPG-KEY-elasticsearch
