@@ -92,10 +92,11 @@ NVIDIA_COMPUTE_MODE=0
 #    nvidia-smi -q -d SUPPORTED_CLOCKS
 #
 # If set to value "max" the maximum speed of each GPU will be queried and set.
-#
 # If not set, default clock speeds are used.
 #
-#NVIDIA_CLOCK_SPEEDS=3004,875
+# For example, to set memory to 3004 MHz and graphics to 875 MHz:
+# NVIDIA_CLOCK_SPEEDS=3004,875
+#
 NVIDIA_CLOCK_SPEEDS=max
 
 
@@ -104,6 +105,8 @@ NVIDIA_CLOCK_SPEEDS=max
 #
 #    nvidia-smi --query-gpu=power.min_limit,power.max_limit --format=csv
 #
-# If not set, GPUs will run at their normal TDP
+# If not set, GPUs will run at their normal TDP (the default)
 #
-#NVIDIA_POWER_LIMIT=200
+# For example, to limit the consumption of each GPU to 200 Watts (or less):
+# NVIDIA_POWER_LIMIT=200
+#

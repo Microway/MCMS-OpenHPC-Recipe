@@ -26,7 +26,7 @@
 ######################## Microway Cluster Management Software (MCMS) for OpenHPC
 ################################################################################
 #
-# Copyright (c) 2015 by Microway, Inc.
+# Copyright (c) 2015-2016 by Microway, Inc.
 #
 # This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
 #
@@ -58,6 +58,7 @@ prog="nvidia"
 NVIDIA_ACCOUNTING=1
 NVIDIA_PERSISTENCE_MODE=1
 NVIDIA_COMPUTE_MODE=0
+NVIDIA_CLOCK_SPEEDS=max
 # pull in sysconfig settings
 [ -f $NVCONFIG ] && . $NVCONFIG
 
@@ -77,9 +78,24 @@ get_max_clocks()
 
 start()
 {
+    /sbin/lspci | grep -qi nvidia
+    if [ $? -ne 0 ] ; then
+        echo -n $"No NVIDIA GPUs present. Skipping NVIDIA GPU tuning."
+        warning
+        echo
+        exit 0
+    fi
+
     echo -n $"Starting $prog: "
+
+    # If the nvidia-smi utility is missing, this script can't do its job
     [ -x $NVSMI ] || exit 5
-    [ -f $NVCONFIG ] || exit 6
+
+    # A configuration file is not required
+    if [ ! -f $NVCONFIG ] ; then
+        echo -n $"No GPU config file present ($NVCONFIG) - using defaults"
+        echo
+    fi
 
     # Set persistence mode first to speed things up
     echo -n "persistence"
@@ -98,6 +114,7 @@ start()
         RETVAL=$?
     fi
 
+
     if [ ! $RETVAL -gt 0 ]; then
         echo -n " clocks"
         if [ -n "$NVIDIA_CLOCK_SPEEDS" ]; then
@@ -107,8 +124,17 @@ start()
                 get_max_clocks
 
                 GPU_COUNTER=0
+                GPUS_SKIPPED=0
                 while [ "$GPU_COUNTER" -lt ${#MAX_CLOCK_SPEEDS[*]} ] && [ ! $RETVAL -gt 0 ]; do
-                    $NVSMI -i $GPU_COUNTER --applications-clocks=${MAX_CLOCK_SPEEDS[$GPU_COUNTER]} 1> /dev/null
+                    if [[ ${MAX_CLOCK_SPEEDS[$GPU_COUNTER]} =~ Supported ]] ; then
+                        if [ $GPUS_SKIPPED -eq 0 ] ; then
+                            echo
+                            GPUS_SKIPPED=1
+                        fi
+                        echo "Skipping non-boostable GPU"
+                    else
+                        $NVSMI -i $GPU_COUNTER --applications-clocks=${MAX_CLOCK_SPEEDS[$GPU_COUNTER]} 1> /dev/null
+                    fi
                     RETVAL=$?
 
                     GPU_COUNTER=$(( $GPU_COUNTER + 1 ))
@@ -143,6 +169,14 @@ start()
 
 stop()
 {
+    /sbin/lspci | grep -qi nvidia
+    if [ $? -ne 0 ] ; then
+        echo -n $"No NVIDIA GPUs present. Skipping NVIDIA GPU tuning."
+        warning
+        echo
+        exit 0
+    fi
+
     echo -n $"Stopping $prog: "
     [ -x $NVSMI ] || exit 5
 
