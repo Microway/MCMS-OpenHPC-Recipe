@@ -1241,15 +1241,13 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
     cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf /etc/
     cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf ${node_chroot}/etc/
 
-    # FIXME: needs to be revised for the OpenHPC module hierarchy
-    # # Set up the Environment Modules for these versions of CUDA
-    # mkdir -p ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda
-    # for version in 7.0 7.5; do
-    #   cp -a ${dependencies_dir}/modulefiles/core/cuda.lua ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
-    #   sed -i "s/{cuda-version}/${version}/" ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
-    #   sed -i "s/{architecture/${machine_type}/" ${dependencies_dir}/modulefiles/${machine_type}/Core/cuda/${version}.lua
-    # done
-    # (cd ${dependencies_dir}/modulefiles/Core/cuda/ && ln -s 7.5.lua default)
+    # Set up the Environment Modules for these versions of CUDA
+    modules_dir="/opt/ohpc/pub/modulefiles"
+    mkdir -p ${modules_dir}/cuda
+    for version in 7.0 7.5; do
+      cp -a ${dependencies_dir}/${modules_dir}/cuda.lua ${modules_dir}/cuda/${version}.lua
+      sed -i "s/{version}/${version}/" ${modules_dir}/cuda/${version}.lua
+    done
 fi
 
 
