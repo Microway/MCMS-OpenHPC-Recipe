@@ -670,7 +670,7 @@ chroot ${node_chroot} update-pciids
 
 
 ################################################################################
-# Syncronize the built-in users between Head and Compute Nodes
+# Syncronize the built-in users/groups between Head and Compute Nodes
 #
 # If not done now, the users created by the following packages will have
 # different UIDs and GIDs on the Compute Nodes than on the Head Node.
