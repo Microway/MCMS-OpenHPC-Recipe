@@ -162,8 +162,8 @@ wwsh node clone node1 login1
 wwsh provision set login1 --fileadd=loginServers_ifcfg-eth0 --vnfs=login
 wwsh provision set login1 --fileadd=loginServers_ifcfg-eth1 --vnfs=login
 
-wwsh node set login1 --netdev=eth0 --ipaddr=10.0.254.253 --netmask=255.255.0.0 --hwaddr=00:aa:bb:cc:dd:ee --fqdn=login1.hpc.example.com
-wwsh node set login1 --netdev=eth1 --ipaddr=<campus IP address> --netmask=<campus netmask> --gateway=<campus gateway> --hwaddr=00:aa:bb:cc:dd:ef
+wwsh node set login1 --netdev=eth0 --ipaddr=10.0.254.253 --netmask=255.255.0.0 --hwaddr=00:aa:bb:cc:dd:ee --mtu=9000 --fqdn=login1.hpc.example.com
+wwsh node set login1 --netdev=eth1 --ipaddr=<campus IP address> --netmask=<campus netmask> --gateway=<campus gateway> --mtu=9000 --hwaddr=00:aa:bb:cc:dd:ef
 wwsh node set login1 --netdev=ib0 --ipaddr=10.10.254.253 --netmask=255.255.0.0
 wwsh node set login1 --domain=hpc.example.com
 wwsh ipmi set login1 --ipaddr=10.13.254.253

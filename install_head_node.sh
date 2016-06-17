@@ -961,6 +961,7 @@ for ((i=0; i<$compute_node_count; i++)) ; do
                                --netmask=${internal_netmask} \
                                --hwaddr=${c_mac[$i]}         \
                                --netdev=${eth_provision}     \
+                               --mtu=9000                    \
                                --gateway=${sms_ip}
     wwsh -y ipmi set ${c_name} --autoconfig=1                \
                                --ipaddr=${c_bmc[$i]}         \
