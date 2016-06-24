@@ -1338,6 +1338,7 @@ mcms_package_selections['global']="
     git
     golang
     htop
+    iotop
     java-1.6.0-openjdk-devel java-1.7.0-openjdk-devel java-1.8.0-openjdk-devel
     libtool
     lsof
