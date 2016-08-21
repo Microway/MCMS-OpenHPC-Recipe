@@ -1337,6 +1337,7 @@ mcms_package_selections['global']="
 
     bc
     byacc
+    bzip2
     emacs
     gdb
     git
