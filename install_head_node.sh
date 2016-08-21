@@ -400,6 +400,10 @@ if [[ "${restrict_user_ssh_logins}" == "true" ]]; then
 - : ALL EXCEPT root hpc-admin : ALL
 "   >> ${node_chroot}/etc/security/access.conf
     echo "
+
+# Check for entries in /etc/security/access.conf
+account    sufficient   pam_access.so
+
 # Reject users who do not have jobs running on this node
 account    required     pam_slurm.so
 "   >> ${node_chroot}/etc/pam.d/sshd
