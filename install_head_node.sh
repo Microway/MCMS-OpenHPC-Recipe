@@ -1447,7 +1447,7 @@ chroot ${node_chroot} pip install gnuplot-py
 pip install --upgrade pymongo
 
 # Do not automatically run ldconfig on boot
-chroot ${node_chroot} "ldconfig; systemctl disable ldconfig.service"
+chroot ${node_chroot} "ldconfig; systemctl disable ldconfig.service; rm -f /usr/lib/systemd/system/sysinit.target.wants/ldconfig.service"
 
 # Clear out the random entries from chrooting into the compute node environment
 > ${node_chroot}/root/.bash_history
