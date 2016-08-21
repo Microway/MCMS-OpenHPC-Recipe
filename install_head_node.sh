@@ -1446,6 +1446,9 @@ chroot ${node_chroot} pip install gnuplot-py
 # The distro version of pymongo is too old to support newer credentials
 pip install --upgrade pymongo
 
+# Do not automatically run ldconfig on boot
+chroot ${node_chroot} "ldconfig; systemctl disable ldconfig.service"
+
 # Clear out the random entries from chrooting into the compute node environment
 > ${node_chroot}/root/.bash_history
 
