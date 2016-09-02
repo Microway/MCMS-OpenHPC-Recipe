@@ -182,7 +182,7 @@ rm -f /tmp/ohpc-release.x86_64.rpm
 yum -y install docs-ohpc
 yum -y groupinstall ohpc-base
 yum -y groupinstall ohpc-warewulf
-yum -y install warewulf-ipmi-ohpc
+yum -y install warewulf-ipmi-ohpc warewulf-nhc-ohpc
 
 # Create a group for HPC administrators
 groupadd hpc-admin
@@ -417,6 +417,7 @@ cp -p /etc/resolv.conf ${node_chroot}/etc/resolv.conf
 # Install necessary compute node daemons
 yum -y --installroot=${node_chroot} groupinstall ohpc-slurm-client
 yum -y --installroot=${node_chroot} install kernel lmod-ohpc ntp
+yum -y --installroot=${node_chroot} install warewulf-nhc-ohpc
 
 chroot ${node_chroot} systemctl enable munge.service
 chroot ${node_chroot} systemctl enable slurm.service
