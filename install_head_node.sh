@@ -417,10 +417,16 @@ cp -p /etc/resolv.conf ${node_chroot}/etc/resolv.conf
 # Install necessary compute node daemons
 yum -y --installroot=${node_chroot} groupinstall ohpc-slurm-client
 yum -y --installroot=${node_chroot} install kernel lmod-ohpc ntp
-yum -y --installroot=${node_chroot} install warewulf-nhc-ohpc
+yum -y --installroot=${node_chroot} install freeipmi-ipmiseld
 
 chroot ${node_chroot} systemctl enable munge.service
 chroot ${node_chroot} systemctl enable slurm.service
+chroot ${node_chroot} systemctl enable ipmiseld.service
+
+
+# Install and configure Node Health Check (NHC)
+yum -y --installroot=${node_chroot} install warewulf-nhc-ohpc
+cp ${dependencies_dir}/etc/nhc/* ${node_chroot}/etc/nhc/
 
 
 if [[ "${enable_infiniband}" == "true" ]]; then
