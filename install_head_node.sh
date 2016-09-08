@@ -612,6 +612,12 @@ chown slurm:slurm /var/spool/slurmd/.ssh/.healthcheck-ssh-key   \
                   /var/spool/slurmd/.ssh/.healthcheck-ssh-key.pub
 # Modify the access key to only allow the execution of the health check
 cat ${node_chroot}/root/.ssh/healthcheck-ssh-key.pub | sed 's+^+no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty,command="/root/.ssh/validate-ssh-command" +' >> ${node_chroot}/root/.ssh/authorized_keys
+# Ensure SSH will connect to new nodes
+echo "# Require no strict host checking when logging into nodes as the slurm user
+Host *
+   StrictHostKeyChecking=no" >> /var/spool/slurmd/.ssh/config
+chmod 600 /var/spool/slurmd/.ssh/config
+chown slurm:slurm /var/spool/slurmd/.ssh/config
 # Generate SSH key which allows slurm to power down idle nodes
 ssh-keygen -t rsa -N "" -f ${node_chroot}/root/.ssh/poweroff-ssh-key   \
            -C "Allow SLURM to power off compute nodes as the root user"
