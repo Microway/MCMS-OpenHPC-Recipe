@@ -3,7 +3,7 @@
 ######################## Microway Cluster Management Software (MCMS) for OpenHPC
 ################################################################################
 #
-# Copyright (c) 2015 by Microway, Inc.
+# Copyright (c) 2015-2016 by Microway, Inc.
 #
 # This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
 #
@@ -57,8 +57,8 @@ echo $rejection_message
 *\|*)
 echo $rejection_message
 ;;
-/mcms/core/slurm/scripts/libexec/slurm.healthcheck_long)
-/mcms/core/slurm/scripts/libexec/slurm.healthcheck_long
+/etc/slurm/scripts/slurm.healthcheck_long)
+/etc/slurm/scripts/slurm.healthcheck_long
 ;;
 /sbin/poweroff)
 /sbin/poweroff

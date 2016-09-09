@@ -427,6 +427,7 @@ chroot ${node_chroot} systemctl enable ipmiseld.service
 # Install and configure Node Health Check (NHC)
 yum -y --installroot=${node_chroot} install warewulf-nhc-ohpc
 cp ${dependencies_dir}/etc/nhc/* ${node_chroot}/etc/nhc/
+cp ${dependencies_dir}/etc/sysconfig/nhc ${node_chroot}/etc/sysconfig/
 
 
 if [[ "${enable_infiniband}" == "true" ]]; then

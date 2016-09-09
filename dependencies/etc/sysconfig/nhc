@@ -26,19 +26,7 @@
 #
 # Node Health Check (NHC) configuration file
 #
-# Checks to be run on compute nodes only
-#
-# These tests are started when Compute Nodes are idle (before a job starts). All
-# filesystem-intensive checks (including checks of network filesystems) should
-# be performed here. These tests should be written with the understanding that
-# they may lock up if a filesystem hangs (e.g., if the NFS server goes down).
-#
-#
-# Lines are in the form "<hostmask>||<check>"
-# Hostmask is a glob, /regexp/, or {noderange}
-# Comments begin with '#'
-#
-################################################################################
+#######################################################################
 
 
 #######################################################################
@@ -46,44 +34,22 @@
 ### NHC Configuration Variables
 ###
 
+# If you are having trouble with NHC, uncomment the following lines
+# to get a full verbose log of the situation:
 #
-# NHC-wide configuration settings (such as PATH and resource manager)
-# are set system-wide in the file:
-#
-#    /etc/sysconfig/nhc
-#
+# VERBOSE=1
+# DEBUG=1
 
+# Uncomment to let nodes continue running jobs (even when problems are found)
+# MARK_OFFLINE=0
 
-#######################################################################
-###
-### Filesystem checks
-###
+# Uncomment to run ALL checks (instead of exiting upon the first failure)
+# NHC_CHECK_ALL=1
 
-#
-# Check for modest amounts of free space. Free inodes are also important.
-#
+# If necessary, additional directories may be added to PATH
+# PATH="/opt/example/bin:$PATH"
 
- *  || export DF_FLAGS="-Tka"
- *  || export DFI_FLAGS="-Tka"
-
- *  || check_fs_free / 3%
- *  || check_fs_ifree / 1k
-
- *  || check_fs_free /home 3%
- *  || check_fs_ifree /home 1k
-
- *  || check_fs_free /opt 3%
- *  || check_fs_ifree /opt 1k
-
- *  || check_fs_free /tmp 3%
- *  || check_fs_ifree /tmp 1k
-
- *  || check_fs_free /var 3%
- *  || check_fs_ifree /var 1k
-
- *  || check_fs_free /var/tmp 3%
- *  || check_fs_ifree /var/tmp 1k
-
- *  || check_fs_free /var/log 3%
- *  || check_fs_ifree /var/log 1k
+# Set the resource manager/workload manager to SLURM
+PATH="/usr/slurm/16.05/bin:$PATH"
+NHC_RM=slurm
 
