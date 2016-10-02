@@ -593,8 +593,6 @@ chown slurm:slurm {,${node_chroot}}/var/{lib,run,spool}/slurmd
 chown slurm:slurm {,${node_chroot}}/var/log/slurm
 
 # Add some additional settings/capabilities during slurmd start-up
-cp ${dependencies_dir}/etc/sysconfig/slurm /etc/sysconfig/
-cp ${dependencies_dir}/etc/sysconfig/slurm ${node_chroot}/etc/sysconfig/
 cp ${dependencies_dir}/etc/slurm/gres.conf /etc/slurm/
 cp ${dependencies_dir}/etc/slurm/gres.conf ${node_chroot}/etc/slurm/
 
@@ -1202,25 +1200,25 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
     # Determine the architecture of the system (e.g., x86_64)
     machine_type=$(uname --processor)
 
-    curl -L -o cuda-repo-rhel7-7.5-18.x86_64.rpm http://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-repo-rhel7-7.5-18.x86_64.rpm
+    curl -L -o cuda-repo-rhel7-8.0.44-1.x86_64.rpm http://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-repo-rhel7-8.0.44-1.x86_64.rpm
 
     # Install the CUDA repo on the Head Node and Compute Node image
-    yum -y install cuda-repo-rhel7-7.5-18.x86_64.rpm
-    yum -y --installroot ${node_chroot} install cuda-repo-rhel7-7.5-18.x86_64.rpm
-    rm -f cuda-repo-rhel7-7.5-18.x86_64.rpm
+    yum -y install cuda-repo-rhel7-8.0.44-1.x86_64.rpm
+    yum -y --installroot ${node_chroot} install cuda-repo-rhel7-8.0.44-1.x86_64.rpm
+    rm -f cuda-repo-rhel7-8.0.44-1.x86_64.rpm
 
     # Run the installer on the Head Node and Compute Node image
     yum --disablerepo="*" --enablerepo="cuda" list available
     yum clean all
-    yum -y install cuda-7-0 cuda-7-5
-    yum -y --installroot ${node_chroot} install cuda-7-0 cuda-7-5
+    yum -y install cuda-7-0 cuda-7-5 cuda-8-0
+    yum -y --installroot ${node_chroot} install cuda-7-0 cuda-7-5 cuda-8-0
 
     # NVIDIA is naughty and sets a fixed path to CUDA using a symlink.
     # This will get in the way when users want to switch from the default version.
     rm -f /usr/local/cuda ${node_chroot}/usr/local/cuda
 
     # Build the CUDA samples (though some will not build without other deps)
-    for version in 7.0 7.5; do
+    for version in 7.0 7.5 8.0; do
         echo "Building CUDA $version samples..."
         cp -a /usr/local/cuda-${version}/samples /usr/local/cuda-${version}/tmp-build
         cd /usr/local/cuda-${version}/tmp-build
@@ -1256,6 +1254,15 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
     # By default, we'll assume we're not bringing up GPUs in the Head Node
     chroot ${node_chroot} systemctl enable nvidia-gpu.service
 
+    # For SLURM versions 16.xx, the systemd service needs to wait for nvidia-gpu
+    #
+    #  sed -i 's/After=network.target/After=network.target nvidia-gpu.service/'\
+    #         ${node_chroot}/usr/lib/systemd/system/slurmd.service
+    #
+    # Also, add this before the ExecStart in slurmd.service
+    #
+    #  ExecStartPre=/etc/slurm/scripts/slurmd.gres_init
+
     # Put the GPU health check settings in place
     cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf /etc/
     cp -a ${dependencies_dir}/etc/nvidia-healthmon.conf ${node_chroot}/etc/
@@ -1263,7 +1270,7 @@ if [[ "${enable_nvidia_gpu}" == "true" ]]; then
     # Set up the Environment Modules for these versions of CUDA
     modules_dir="/opt/ohpc/pub/modulefiles"
     mkdir -p ${modules_dir}/cuda
-    for version in 7.0 7.5; do
+    for version in 7.0 7.5 8.0; do
       cp -a ${dependencies_dir}/${modules_dir}/cuda.lua ${modules_dir}/cuda/${version}.lua
       sed -i "s/{version}/${version}/" ${modules_dir}/cuda/${version}.lua
     done
