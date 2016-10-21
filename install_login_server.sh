@@ -77,8 +77,7 @@ hybridize += /usr/lib64/firefox
 ################################################################################
 # Disable the services that are only needed on Compute Nodes
 ################################################################################
-chroot ${login_chroot} systemctl disable munge.service
-chroot ${login_chroot} systemctl disable slurm.service
+chroot ${login_chroot} systemctl disable slurmd.service
 
 
 
@@ -137,7 +136,59 @@ chroot ${login_chroot} systemctl enable firewalld.service
 # We can allow more services here, if desired:
 #
 # chroot ${login_chroot} firewall-offline-cmd --zone=public --add-service=http
+# chroot ${login_chroot} firewall-offline-cmd --zone=public --add-port=4000/tcp
 #
+
+
+
+################################################################################
+# If remote graphical access is desired, NoMachine works well. It is a licensed
+# product, but is stable and provides better performance. Microway can help you
+# select a version with the capabilities you require:
+# https://www.microway.com/technologies/software/responsive-enterprise-class-remote-desktops-nomachine/
+################################################################################
+
+# Install common desktop environments
+yum -y --installroot=${login_chroot} groups install "GNOME Desktop"
+yum -y --installroot=${login_chroot} groups install "KDE Plasma Workspaces"
+
+# Disable SELinux
+setenforce 0
+sed -i 's/SELINUX=enforcing/SELINUX=disabled/' ${login_chroot}/etc/selinux/config
+
+# ##############################################################################
+# # Syncronize the built-in users/groups between the Head and the Login Nodes
+# #
+# # If not done now, the users created by the following packages will have
+# # different UIDs and GIDs on the Login Nodes than on the Head Node.
+# ##############################################################################
+#
+# groupadd nx
+# groupadd nxhtd
+#
+# useradd --home-dir '/var/NX/nx'    \
+#         --password '*'             \
+#         --gid nx                   \
+#         --shell /bin/false         \
+#         --system                   \
+#         nx
+#
+# useradd --home-dir '/var/NX/nxhtd' \
+#         --password '*'             \
+#         --gid nxhtd                \
+#         --shell /bin/false         \
+#         --system                   \
+#         nxhtd
+#
+# cp -af /etc/passwd ${login_chroot}/etc/
+# cp -af /etc/group ${login_chroot}/etc/
+# wwsh file sync
+#
+#
+# An admin will need to manually install the selected NoMachine services
+#
+#
+# chroot ${login_chroot} systemctl enable nxserver.service
 
 
 
