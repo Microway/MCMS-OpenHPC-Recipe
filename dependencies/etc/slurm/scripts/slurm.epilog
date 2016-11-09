@@ -3,7 +3,7 @@
 ######################## Microway Cluster Management Software (MCMS) for OpenHPC
 ################################################################################
 #
-# Copyright (c) 2015 by Microway, Inc.
+# Copyright (c) 2015-2016 by Microway, Inc.
 #
 # This file is part of Microway Cluster Management Software (MCMS) for OpenHPC.
 #
@@ -38,7 +38,7 @@
 
 
 # The default SLURM path can be replaced, if necessary
-#SLURM_BIN_DIR=/usr/bin/
+SLURM_BIN_DIR=/usr/slurm/16.05/bin/
 
 
 #
@@ -111,6 +111,7 @@ for tmpdir in $TMP_DIRS; do
     find_retval=$?
 
     if [[ $find_retval -gt 0 ]]; then
+        echo "Epilog error - unable to clean up temp files in $tmpdir"
         exit $find_retval
     fi
 done
