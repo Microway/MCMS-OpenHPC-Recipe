@@ -1389,6 +1389,7 @@ mcms_package_selections['global']="
 
     dvipng
     firefox
+    flex flex-devel flex-doc
     gnuplot
     graphviz graphviz-devel
     ImageMagick
@@ -1424,6 +1425,7 @@ mcms_package_selections['development']="
     leveldb-devel
     libart_lgpl-devel
     libconfuse-devel
+    libcurl-devel
     libjasper-devel
     libjpeg-turbo-devel
     libmpc libmpc-devel
