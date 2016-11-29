@@ -47,7 +47,7 @@ echo "
 # The following compute nodes will be used: $SLURM_NODELIST
 #"
 
-NPROCS=$SLURM_NTASKS
+NPROCS=$(( $SLURM_NTASKS * $SLURM_CPUS_PER_TASK ))
 NODES=$SLURM_JOB_NUM_NODES
 NUM_SOCKETS=$((`grep 'physical id' /proc/cpuinfo | sort -u | tail -n1 | cut -d" " -f3` + 1))
 NUM_CORES=$(grep siblings /proc/cpuinfo | head -n1 | cut -d" " -f2)
