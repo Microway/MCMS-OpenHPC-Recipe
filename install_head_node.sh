@@ -1416,6 +1416,7 @@ mcms_package_selections['global']="
 mcms_package_selections['development']="
     apr-devel
     bzip2-devel
+    doxygen
     expat-devel
     glibc-devel.i686 glibc-static
     gmp-devel
